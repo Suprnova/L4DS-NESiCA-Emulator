@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 
 	"l4ds-nesica-emulator/internal/game"
+	"l4ds-nesica-emulator/internal/matching"
 	"l4ds-nesica-emulator/internal/nesys"
 	"l4ds-nesica-emulator/internal/pipe"
 	"l4ds-nesica-emulator/internal/store"
@@ -29,6 +30,7 @@ func main() {
 	prefecture := flag.String("prefecture", "Tokyo", "prefecture reported for the store; must not be empty")
 	dbPath := flag.String("db", "l4ds.db", "SQLite database holding the players")
 	gameDir := flag.String("game-dir", "", "game install folder; its level table sets player levels (all players are level 1 without it)")
+	masterAddr := flag.String("master", ":27010", "UDP address of the matching master")
 	flag.Parse()
 
 	var levels *game.LevelTable
@@ -70,6 +72,14 @@ func main() {
 		<-ctx.Done()
 		listener.Close()
 	}()
+
+	master, err := net.ListenPacket("udp", *masterAddr)
+	if err != nil {
+		slog.Error("listen for matching", "address", *masterAddr, "error", err)
+		os.Exit(1)
+	}
+	defer master.Close()
+	go matching.Serve(master)
 
 	slog.Info("serving", "pipe", *path, "server-key", *serverKey)
 	for {
