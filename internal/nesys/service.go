@@ -33,8 +33,12 @@ type Config struct {
 
 // Cards answers the game's card commands.
 type Cards interface {
-	// Select returns the reply body describing the player registered to a card.
-	Select(cardID string) (string, error)
+	// Select returns the reply describing the player registered to a card. A card with no
+	// player gets wire.CardStatusUnregistered.
+	Select(cardID string) (wire.CardReply, error)
+
+	// ReissueTest answers whether a card was reissued from another card.
+	ReissueTest(cardID string) (wire.CardReply, error)
 
 	// Insert registers a player to a card from the game's comma-separated key=value text and
 	// returns the reply body.
@@ -98,6 +102,8 @@ func respond(config Config, request wire.Frame) []wire.Frame {
 		slog.Info("card update", "payload", fmt.Sprintf("%q", request.Payload[min(len(request.Payload), 16):]))
 		reply := wire.CardReply{Status: 1, Body: "1\n1\n"}
 		return []wire.Frame{{Command: wire.CardUpdateReply, Payload: reply.Encode()}}
+	case wire.CardReissueTest:
+		return reissueTest(config.Cards, request.Payload)
 	case wire.CardInsert:
 		return insertCard(config.Cards, request.Payload)
 	case wire.CardSelect:
@@ -140,13 +146,11 @@ func selectCard(cards Cards, payload []byte) []wire.Frame {
 	}
 
 	slog.Info("card select", "card", request.CardID, "kind", request.Kind, "data", request.Data)
-	body, err := cards.Select(request.CardID)
+	reply, err := cards.Select(request.CardID)
 	if err != nil {
 		slog.Error("card select", "card", request.CardID, "error", err)
 		return nil
 	}
-
-	reply := wire.CardReply{Status: 1, Body: body}
 	return []wire.Frame{{Command: wire.CardSelectReply, Payload: reply.Encode()}}
 }
 
@@ -165,4 +169,19 @@ func insertCard(cards Cards, payload []byte) []wire.Frame {
 
 	reply := wire.CardReply{Status: 1, Body: body}
 	return []wire.Frame{{Command: wire.CardInsertReply, Payload: reply.Encode()}}
+}
+
+func reissueTest(cards Cards, payload []byte) []wire.Frame {
+	cardID, err := wire.ParseCardID(payload)
+	if err != nil || cards == nil {
+		return nil
+	}
+
+	slog.Info("card reissue test", "card", cardID)
+	reply, err := cards.ReissueTest(cardID)
+	if err != nil {
+		slog.Error("card reissue test", "card", cardID, "error", err)
+		return nil
+	}
+	return []wire.Frame{{Command: wire.CardReissueTestReply, Payload: reply.Encode()}}
 }

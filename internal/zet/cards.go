@@ -10,25 +10,23 @@ import (
 	"strings"
 
 	"l4ds-nesica-emulator/internal/store"
+	"l4ds-nesica-emulator/internal/wire"
 )
 
 // avatarLines is the number of lines in an avatar block: ten slots of id, resource id and
 // color index.
 const avatarLines = 30
 
-// unregisteredCard is the card server result code for a card with no player.
-const unregisteredCard = 23
-
 // Select answers a card lookup with the profile of the player registered to the card. An
-// unregistered card gets the unregisteredCard result and no profile. The avatar, title and
-// equipment blocks are empty, so the game uses its defaults.
-func (s *Server) Select(cardID string) (string, error) {
+// unregistered card gets the card server's unregistered status and no profile. The avatar,
+// title and equipment blocks are empty, so the game uses its defaults.
+func (s *Server) Select(cardID string) (wire.CardReply, error) {
 	player, err := s.store.PlayerByCard(cardID)
 	if errors.Is(err, store.ErrNotRegistered) {
-		return fmt.Sprintf("%d\n1\n%s\n", unregisteredCard, cardID), nil
+		return wire.CardReply{Status: wire.CardStatusUnregistered, Body: "0\n1\n" + cardID + "\n"}, nil
 	}
 	if err != nil {
-		return "", err
+		return wire.CardReply{}, err
 	}
 
 	lines := []any{
@@ -45,7 +43,12 @@ func (s *Server) Select(cardID string) (string, error) {
 	for _, line := range lines {
 		fmt.Fprintf(&body, "%v\n", line)
 	}
-	return body.String(), nil
+	return wire.CardReply{Status: 1, Body: body.String()}, nil
+}
+
+// ReissueTest answers that no card was reissued from another card.
+func (s *Server) ReissueTest(cardID string) (wire.CardReply, error) {
+	return wire.CardReply{Status: 1, Body: "0\n1\n" + cardID + "\n"}, nil
 }
 
 // Insert registers a player to a card from the game's key=value text, as in

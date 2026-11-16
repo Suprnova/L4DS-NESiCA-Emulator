@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"l4ds-nesica-emulator/internal/store"
+	"l4ds-nesica-emulator/internal/wire"
 	"l4ds-nesica-emulator/internal/zet"
 )
 
@@ -26,8 +27,9 @@ func TestServer_Select_ReturnsTheStoredPlayer(t *testing.T) {
 	player, _ := s.Register("7020392000000001", "Survivor", 0)
 	s.RecordResult(player.ID, store.Result{Zet: 568, Score: 195})
 
-	body, err := server.Select("7020392000000001")
+	reply, err := server.Select("7020392000000001")
 
+	body := reply.Body
 	lines := strings.Split(body, "\n")
 	if err != nil || lines[0] != "1" || lines[2] != "7020392000000001" || lines[3] != "1" || lines[4] != "Survivor" || lines[5] != "568" || lines[7] != "195" {
 		t.Fatalf("Select() = %q, %v", body, err)
@@ -40,21 +42,31 @@ func TestServer_Select_ReportsExperienceAndLoginsAfterTheEmptyBlocks(t *testing.
 	s.RecordResult(player.ID, store.Result{Exp: 222})
 	s.RecordLogin(player.ID)
 
-	body, _ := server.Select("7020392000000001")
+	reply, _ := server.Select("7020392000000001")
 
-	lines := strings.Split(body, "\n")
+	lines := strings.Split(reply.Body, "\n")
 	if lines[53] != "222" || lines[87] != "1" {
 		t.Fatalf("experience line = %q, login_num line = %q", lines[53], lines[87])
 	}
 }
 
-func TestServer_Select_UnregisteredCard_ReportsTheUnregisteredResult(t *testing.T) {
+func TestServer_Select_UnregisteredCard_ReportsTheUnregisteredStatus(t *testing.T) {
 	server, _ := newServer(t)
 
-	body, err := server.Select("7020392000000009")
+	reply, err := server.Select("7020392000000009")
 
-	if err != nil || body != "23\n1\n7020392000000009\n" {
-		t.Fatalf("Select() = %q, %v", body, err)
+	if err != nil || reply.Status != wire.CardStatusUnregistered || reply.Body != "0\n1\n7020392000000009\n" {
+		t.Fatalf("Select() = %+v, %v", reply, err)
+	}
+}
+
+func TestServer_ReissueTest_ReportsNoReissue(t *testing.T) {
+	server, _ := newServer(t)
+
+	reply, err := server.ReissueTest("7020392000000009")
+
+	if err != nil || reply.Status != 1 || reply.Body != "0\n1\n7020392000000009\n" {
+		t.Fatalf("ReissueTest() = %+v, %v", reply, err)
 	}
 }
 

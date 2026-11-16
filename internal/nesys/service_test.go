@@ -141,8 +141,12 @@ func TestServe_ClientEnd_RepliesAndStops(t *testing.T) {
 
 type fakeCards struct{}
 
-func (fakeCards) Select(cardID string) (string, error) {
-	return "1\n1\n" + cardID + "\n0\n", nil
+func (fakeCards) Select(cardID string) (wire.CardReply, error) {
+	return wire.CardReply{Status: 1, Body: "1\n1\n" + cardID + "\n0\n"}, nil
+}
+
+func (fakeCards) ReissueTest(cardID string) (wire.CardReply, error) {
+	return wire.CardReply{Status: 1, Body: "0\n1\n" + cardID + "\n"}, nil
 }
 
 func (fakeCards) Insert(cardID, data string) (string, error) {
@@ -234,6 +238,23 @@ func TestServe_CardInsert_RepliesWithTheCardsBody(t *testing.T) {
 
 	want := wire.CardReply{Status: 1, Body: "1\n1\n7\n"}.Encode()
 	if reply.Command != wire.CardInsertReply || string(reply.Payload) != string(want) {
+		t.Fatalf("reply = %+v", reply)
+	}
+}
+
+func TestServe_CardReissueTest_RepliesWithTheCardsReply(t *testing.T) {
+	config := testConfig
+	config.Cards = fakeCards{}
+	game, service := net.Pipe()
+	t.Cleanup(func() { game.Close() })
+	go nesys.Serve(service, config)
+	payload := make([]byte, 0x14)
+	copy(payload, "7020392000000001")
+
+	reply := exchange(t, game, wire.CardReissueTest, payload)
+
+	want := wire.CardReply{Status: 1, Body: "0\n1\n7020392000000001\n"}.Encode()
+	if reply.Command != wire.CardReissueTestReply || string(reply.Payload) != string(want) {
 		t.Fatalf("reply = %+v", reply)
 	}
 }
