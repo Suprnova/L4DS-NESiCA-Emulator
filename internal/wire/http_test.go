@@ -9,11 +9,11 @@ import (
 )
 
 func httpRequestPayload(url string, sequence uint32, body string) []byte {
-	payload := make([]byte, 0xC5B+len(body))
+	payload := make([]byte, 0xC59+len(body))
 	copy(payload, url)
 	binary.LittleEndian.PutUint32(payload[0x848:], sequence)
 	binary.LittleEndian.PutUint32(payload[0x854:], uint32(len(body)))
-	copy(payload[0xC5B:], body)
+	copy(payload[0xC59:], body)
 	return payload
 }
 
@@ -47,5 +47,15 @@ func TestHTTPResponseEncode_Response_PlacesFieldsAndBody(t *testing.T) {
 		binary.LittleEndian.Uint32(payload[0x40C:]) != 7 || binary.LittleEndian.Uint32(payload[0x410:]) != 4 ||
 		!bytes.Equal(payload[0x414:], []byte("1\n0\n")) {
 		t.Fatalf("payload tail = % X", payload[0x400:])
+	}
+}
+
+func TestParseHTTPRequest_PaddingAfterBody_IsExcludedFromBody(t *testing.T) {
+	payload := append(httpRequestPayload("http://lobby/x", 1, "abc"), 0, 0)
+
+	got, err := wire.ParseHTTPRequest(payload)
+
+	if err != nil || string(got.Body) != "abc" {
+		t.Fatalf("ParseHTTPRequest() = %+v, %v", got, err)
 	}
 }

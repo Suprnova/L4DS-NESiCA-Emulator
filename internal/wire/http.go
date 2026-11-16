@@ -3,7 +3,7 @@ package wire
 import "encoding/binary"
 
 const (
-	httpRequestHeaderSize = 0xC5B
+	httpRequestHeaderSize = 0xC59
 	httpReplyHeaderSize   = 0x414
 	httpURLSize           = 0x401
 )
@@ -16,21 +16,22 @@ type HTTPRequest struct {
 	Body     []byte
 }
 
-// ParseHTTPRequest decodes the payload of an HTTPPost command.
+// ParseHTTPRequest decodes the payload of an HTTPPost command. The game pads the payload
+// after the body, so the declared body length decides where the body ends.
 func ParseHTTPRequest(payload []byte) (HTTPRequest, error) {
 	if len(payload) < httpRequestHeaderSize {
 		return HTTPRequest{}, ErrBadFrame
 	}
 
 	bodyLength := binary.LittleEndian.Uint32(payload[0x854:])
-	if uint64(len(payload)-httpRequestHeaderSize) != uint64(bodyLength) {
+	if uint64(len(payload)-httpRequestHeaderSize) < uint64(bodyLength) {
 		return HTTPRequest{}, ErrBadFrame
 	}
 
 	return HTTPRequest{
 		URL:      getString(payload[:httpURLSize]),
 		Sequence: binary.LittleEndian.Uint32(payload[0x848:]),
-		Body:     payload[httpRequestHeaderSize:],
+		Body:     payload[httpRequestHeaderSize : httpRequestHeaderSize+int(bodyLength)],
 	}, nil
 }
 
