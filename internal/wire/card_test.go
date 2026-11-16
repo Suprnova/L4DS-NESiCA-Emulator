@@ -38,3 +38,29 @@ func TestCardReply_Encode_PrefixesStatusAndBodyLength(t *testing.T) {
 		t.Fatalf("Encode() = %v, want %v", got, want)
 	}
 }
+
+func TestParseCardWriteRequest_ValidPayload_ReadsCardTypeAndData(t *testing.T) {
+	payload := make([]byte, 32)
+	copy(payload, "7020392000000001")
+	binary.LittleEndian.PutUint32(payload[24:], 3)
+	binary.LittleEndian.PutUint32(payload[28:], 5)
+	payload = append(payload, "hello"...)
+	payload = append(payload, 0, 0, 0)
+
+	got, err := wire.ParseCardWriteRequest(payload)
+
+	if err != nil || got.CardID != "7020392000000001" || got.DataType != 3 || string(got.Data) != "hello" {
+		t.Fatalf("ParseCardWriteRequest() = %+v, %v", got, err)
+	}
+}
+
+func TestParseCardWriteRequest_DataLongerThanPayload_ReturnsErrBadFrame(t *testing.T) {
+	payload := make([]byte, 32)
+	binary.LittleEndian.PutUint32(payload[28:], 99)
+
+	_, err := wire.ParseCardWriteRequest(payload)
+
+	if err != wire.ErrBadFrame {
+		t.Fatalf("error = %v, want ErrBadFrame", err)
+	}
+}

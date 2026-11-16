@@ -45,3 +45,30 @@ func (r CardReply) Encode() []byte {
 	buf = binary.LittleEndian.AppendUint32(buf, uint32(len(r.Body)))
 	return append(buf, r.Body...)
 }
+
+// CardWriteRequest is the payload of the CardInsert and CardUpdate commands: text the game
+// stores on a card.
+type CardWriteRequest struct {
+	CardID   string
+	DataType uint32
+	Data     []byte
+}
+
+// ParseCardWriteRequest decodes the payload of a CardInsert or CardUpdate command.
+func ParseCardWriteRequest(payload []byte) (CardWriteRequest, error) {
+	const headerSize = cardIDSize + 16
+	if len(payload) < headerSize {
+		return CardWriteRequest{}, ErrBadFrame
+	}
+
+	dataLength := binary.LittleEndian.Uint32(payload[cardIDSize+12:])
+	if uint64(len(payload)-headerSize) < uint64(dataLength) {
+		return CardWriteRequest{}, ErrBadFrame
+	}
+
+	return CardWriteRequest{
+		CardID:   getString(payload[:cardIDSize]),
+		DataType: binary.LittleEndian.Uint32(payload[cardIDSize+8:]),
+		Data:     payload[headerSize : headerSize+int(dataLength)],
+	}, nil
+}
