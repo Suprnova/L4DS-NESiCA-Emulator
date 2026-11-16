@@ -21,20 +21,25 @@ var migrations = []string{
 		score   INTEGER NOT NULL DEFAULT 0
 	)`,
 	`ALTER TABLE players ADD COLUMN logins INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE players ADD COLUMN chara_id INTEGER NOT NULL DEFAULT 0`,
 }
 
-// DefaultName is the name of a player created by their first card scan.
-const DefaultName = "Survivor"
+// ErrNotRegistered reports that no player is registered to a card.
+var ErrNotRegistered = errors.New("store: card is not registered")
+
+// ErrAlreadyRegistered reports that a card already has a player.
+var ErrAlreadyRegistered = errors.New("store: card is already registered")
 
 // Player is a registered player and their progress totals.
 type Player struct {
-	ID     int64
-	CardID string
-	Name   string
-	Zet    int64
-	Exp    int64
-	Score  int64
-	Logins int64
+	ID      int64
+	CardID  string
+	Name    string
+	Zet     int64
+	Exp     int64
+	Score   int64
+	Logins  int64
+	CharaID int64
 }
 
 // Result is what a finished chapter adds to a player's totals.
@@ -85,11 +90,23 @@ func migrate(db *sql.DB) error {
 // Close closes the database.
 func (s *Store) Close() error { return s.db.Close() }
 
-// PlayerByCard returns the player registered to a card, registering a new one with
-// DefaultName when the card is unknown.
+// PlayerByCard returns the player registered to a card, or ErrNotRegistered.
 func (s *Store) PlayerByCard(cardID string) (Player, error) {
-	if _, err := s.db.Exec(`INSERT OR IGNORE INTO players (card_id, name) VALUES (?, ?)`, cardID, DefaultName); err != nil {
+	player, err := s.player(`card_id = ?`, cardID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Player{}, ErrNotRegistered
+	}
+	return player, err
+}
+
+// Register creates the player for a card, or returns ErrAlreadyRegistered.
+func (s *Store) Register(cardID, name string, charaID int64) (Player, error) {
+	outcome, err := s.db.Exec(`INSERT OR IGNORE INTO players (card_id, name, chara_id) VALUES (?, ?, ?)`, cardID, name, charaID)
+	if err != nil {
 		return Player{}, err
+	}
+	if rows, _ := outcome.RowsAffected(); rows == 0 {
+		return Player{}, ErrAlreadyRegistered
 	}
 	return s.player(`card_id = ?`, cardID)
 }
@@ -121,7 +138,7 @@ func (s *Store) updatePlayer(query string, args ...any) error {
 
 func (s *Store) player(where string, arg any) (Player, error) {
 	var player Player
-	err := s.db.QueryRow(`SELECT id, card_id, name, zet, exp, score, logins FROM players WHERE `+where, arg).
-		Scan(&player.ID, &player.CardID, &player.Name, &player.Zet, &player.Exp, &player.Score, &player.Logins)
+	err := s.db.QueryRow(`SELECT id, card_id, name, zet, exp, score, logins, chara_id FROM players WHERE `+where, arg).
+		Scan(&player.ID, &player.CardID, &player.Name, &player.Zet, &player.Exp, &player.Score, &player.Logins, &player.CharaID)
 	return player, err
 }

@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"database/sql"
+	"errors"
 	"testing"
 
 	_ "modernc.org/sqlite"
@@ -19,30 +20,52 @@ func openStore(t *testing.T) *store.Store {
 	return s
 }
 
-func TestPlayerByCard_UnknownCard_RegistersADefaultPlayer(t *testing.T) {
+const card = "7020392010281502"
+
+func register(t *testing.T, s *store.Store) store.Player {
+	t.Helper()
+	player, err := s.Register(card, "Nova", 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return player
+}
+
+func TestPlayerByCard_UnknownCard_ReturnsErrNotRegistered(t *testing.T) {
 	s := openStore(t)
 
-	player, err := s.PlayerByCard("7020392010281502")
+	_, err := s.PlayerByCard(card)
 
-	if err != nil || player.ID == 0 || player.Name != store.DefaultName || player.CardID != "7020392010281502" {
-		t.Fatalf("PlayerByCard() = %+v, %v", player, err)
+	if !errors.Is(err, store.ErrNotRegistered) {
+		t.Fatalf("error = %v, want ErrNotRegistered", err)
 	}
 }
 
-func TestPlayerByCard_KnownCard_ReturnsTheSamePlayer(t *testing.T) {
+func TestRegister_NewCard_CreatesThePlayer(t *testing.T) {
 	s := openStore(t)
-	first, _ := s.PlayerByCard("7020392010281502")
 
-	second, err := s.PlayerByCard("7020392010281502")
+	player, err := s.Register(card, "Nova", 3)
 
-	if err != nil || second.ID != first.ID {
-		t.Fatalf("PlayerByCard() = %+v, %v; want id %d", second, err, first.ID)
+	found, _ := s.PlayerByCard(card)
+	if err != nil || player.ID == 0 || found.ID != player.ID || found.Name != "Nova" || found.CharaID != 3 {
+		t.Fatalf("Register() = %+v, %v; found %+v", player, err, found)
+	}
+}
+
+func TestRegister_RegisteredCard_ReturnsErrAlreadyRegistered(t *testing.T) {
+	s := openStore(t)
+	register(t, s)
+
+	_, err := s.Register(card, "Other", 1)
+
+	if !errors.Is(err, store.ErrAlreadyRegistered) {
+		t.Fatalf("error = %v, want ErrAlreadyRegistered", err)
 	}
 }
 
 func TestRecordResult_AddsToTheTotals(t *testing.T) {
 	s := openStore(t)
-	player, _ := s.PlayerByCard("7020392010281502")
+	player := register(t, s)
 	s.RecordResult(player.ID, store.Result{Zet: 568, Exp: 222, Score: 195})
 
 	err := s.RecordResult(player.ID, store.Result{Zet: 10, Exp: 5, Score: 1})
@@ -65,7 +88,7 @@ func TestRecordResult_UnknownPlayer_ReturnsAnError(t *testing.T) {
 
 func TestRecordLogin_CountsEachLogin(t *testing.T) {
 	s := openStore(t)
-	player, _ := s.PlayerByCard("7020392010281502")
+	player := register(t, s)
 	s.RecordLogin(player.ID)
 
 	err := s.RecordLogin(player.ID)

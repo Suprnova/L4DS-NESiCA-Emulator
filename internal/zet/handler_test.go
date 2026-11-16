@@ -67,7 +67,7 @@ func TestHandler_ChapterLifecycle_AcceptsEachStage(t *testing.T) {
 
 func TestHandler_Result_AddsTheChapterToThePlayersTotals(t *testing.T) {
 	server, s := newServer(t)
-	player, _ := s.PlayerByCard("7020392000000001")
+	player, _ := s.Register("7020392000000001", "Survivor", 0)
 
 	got := postTo(server, "/result", fmt.Sprintf("player_id=%d&zet=568&exp=222&TOTAL_SCORE=195", player.ID))
 
@@ -79,7 +79,7 @@ func TestHandler_Result_AddsTheChapterToThePlayersTotals(t *testing.T) {
 
 func TestHandler_Login_CountsTheLogin(t *testing.T) {
 	server, s := newServer(t)
-	player, _ := s.PlayerByCard("7020392000000001")
+	player, _ := s.Register("7020392000000001", "Survivor", 0)
 
 	postTo(server, "/login", fmt.Sprintf("player_id=%d", player.ID))
 
