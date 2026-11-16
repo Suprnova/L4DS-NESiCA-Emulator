@@ -86,7 +86,7 @@ func respond(config Config, request wire.Frame) []wire.Frame {
 		return tunnel(config.HTTP, request.Payload)
 	case wire.GameStart:
 		return []wire.Frame{{Command: wire.GameStatusReply, Payload: []byte{1, 0, 0, 0}}}
-	case wire.IncomeStart:
+	case wire.IncomeStart, wire.IncomeEnd:
 		return []wire.Frame{{Command: wire.IncomeStatusReply, Payload: []byte{1, 0, 0, 0, 1, 0, 0, 0}}}
 	case wire.Shopping:
 		return []wire.Frame{{Command: wire.ShoppingReply, Payload: []byte{1, 0, 0, 0}}}
