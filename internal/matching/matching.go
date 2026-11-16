@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/netip"
 	"slices"
 	"strconv"
 	"strings"
@@ -27,8 +28,12 @@ const (
 	// asks for a new room.
 	joinSearch = "5"
 
-	// advertisedPort is the port a room is advertised on: the game port 27015 plus 1000.
-	advertisedPort = 28015
+	// gamePort is the port of a cabinet's own listen server.
+	gamePort = 27015
+
+	// advertisedPortOffset is added to a room's game port in the room entry; the game subtracts
+	// it again before connecting.
+	advertisedPortOffset = 1000
 
 	maxDatagram = 2048
 )
@@ -59,10 +64,10 @@ func ParseQuery(datagram []byte) (Query, bool) {
 // roomTTL is how long a room stays listed after it was created.
 const roomTTL = 10 * time.Minute
 
-// room is a room a cabinet has created on its listen server.
+// room is a room a cabinet has created, and the game server that hosts it.
 type room struct {
 	id         uint32
-	host       net.IP
+	server     netip.AddrPort
 	mode       string
 	rule       string
 	campaign   byte
@@ -76,28 +81,31 @@ type Master struct {
 	mu         sync.Mutex
 	rooms      []room
 	nextRoomID uint32
+	server     netip.AddrPort
 	now        func() time.Time
 }
 
-// NewMaster returns a master with no rooms.
-func NewMaster() *Master { return &Master{nextRoomID: 1, now: time.Now} }
+// NewMaster returns a master with no rooms. New rooms are hosted by the game server at server,
+// or by the asking machine's own listen server on port 27015 when server is the zero value.
+func NewMaster(server netip.AddrPort) *Master {
+	return &Master{nextRoomID: 1, server: server, now: time.Now}
+}
 
 // Reply returns the answer to a query from the machine at from, or nil when it needs none. A
 // reply carries no type byte: the game reads it according to the type of its last request, so
 // a list reply is the big-endian sequence number, the error code, the number of entries, the
 // index of this entry and the entry itself.
 //
-// A query for a new room (room 2) creates a room on the asking machine and returns it. A
-// search for a room to join (room 5) returns the newest listed room that fits the query's mode,
-// rule and difficulty, or an empty list.
-func (m *Master) Reply(from net.IP, query Query) []byte {
+// A query for a new room (room 2) creates a room and returns it. A search for a room to join
+// (room 5) returns the newest listed room that fits the query's mode, rule and difficulty, or an
+// empty list.
+func (m *Master) Reply(from netip.Addr, query Query) []byte {
 	if query.Type != listQuery {
 		return nil
 	}
 
 	sequence, err := strconv.ParseUint(query.Fields["seqNo"], 10, 32)
-	host := from.To4()
-	if err != nil || host == nil {
+	if err != nil || !from.Unmap().Is4() {
 		return nil
 	}
 	reply := binary.BigEndian.AppendUint32(nil, uint32(sequence))
@@ -109,23 +117,27 @@ func (m *Master) Reply(from net.IP, query Query) []byte {
 			return append(reply, errEmptyList)
 		}
 	} else {
-		found = m.create(host, query)
+		found = m.create(from.Unmap(), query)
 	}
 
 	reply = append(reply, errOK, 1, 0)
-	reply = append(reply, found.host...)
-	reply = binary.BigEndian.AppendUint16(reply, advertisedPort)
+	reply = append(reply, found.server.Addr().AsSlice()...)
+	reply = binary.BigEndian.AppendUint16(reply, found.server.Port()+advertisedPortOffset)
 	reply = binary.BigEndian.AppendUint32(reply, found.id)
 	return append(reply, found.campaign, found.chapter, found.difficulty)
 }
 
-func (m *Master) create(host net.IP, query Query) room {
+func (m *Master) create(host netip.Addr, query Query) room {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	server := m.server
+	if !server.IsValid() {
+		server = netip.AddrPortFrom(host, gamePort)
+	}
 	created := room{
 		id:         m.nextRoomID,
-		host:       host,
+		server:     server,
 		mode:       query.Fields["mode"],
 		rule:       query.Fields["rule"],
 		campaign:   max(number(query.Fields["stage"]), 1),
@@ -173,7 +185,7 @@ func (m *Master) Serve(conn net.PacketConn) {
 		slog.Info("matching query", "from", from.String(), "type", string(query.Type), "fields", query.Fields)
 
 		if udp, ok := from.(*net.UDPAddr); ok {
-			if reply := m.Reply(udp.IP, query); reply != nil {
+			if reply := m.Reply(udp.AddrPort().Addr(), query); reply != nil {
 				conn.WriteTo(reply, from)
 			}
 		}

@@ -1,7 +1,7 @@
 package matching_test
 
 import (
-	"net"
+	"net/netip"
 	"slices"
 	"testing"
 
@@ -26,14 +26,14 @@ func TestParseQuery_EmptyDatagram_IsRejected(t *testing.T) {
 	}
 }
 
-var lan = net.IPv4(192, 168, 1, 20)
+var lan = netip.AddrFrom4([4]byte{192, 168, 1, 20})
 
 func searchQuery(sequence, room string) matching.Query {
 	return matching.Query{Type: '2', Fields: map[string]string{"seqNo": sequence, "room": room, "mode": "1", "rule": "1", "difficulty": "1", "stage": "1", "chapter": "1"}}
 }
 
 func TestMaster_JoinSearchWithNoRooms_AnswersWithAnEmptyList(t *testing.T) {
-	got := matching.NewMaster().Reply(lan, searchQuery("258", "5"))
+	got := matching.NewMaster(netip.AddrPort{}).Reply(lan, searchQuery("258", "5"))
 
 	want := []byte{0, 0, 1, 2, 0x7e}
 	if !slices.Equal(got, want) {
@@ -42,7 +42,7 @@ func TestMaster_JoinSearchWithNoRooms_AnswersWithAnEmptyList(t *testing.T) {
 }
 
 func TestMaster_NewRoomQuery_CreatesARoomOnTheAskingMachine(t *testing.T) {
-	master := matching.NewMaster()
+	master := matching.NewMaster(netip.AddrPort{})
 
 	first := master.Reply(lan, searchQuery("13", "2"))
 	second := master.Reply(lan, searchQuery("14", "2"))
@@ -56,12 +56,23 @@ func TestMaster_NewRoomQuery_CreatesARoomOnTheAskingMachine(t *testing.T) {
 	}
 }
 
+func TestMaster_NewRoomQueryWithAGameServer_CreatesTheRoomOnTheGameServer(t *testing.T) {
+	master := matching.NewMaster(netip.MustParseAddrPort("10.0.0.5:27020"))
+
+	got := master.Reply(lan, searchQuery("13", "2"))
+
+	want := []byte{0, 0, 0, 13, 1, 1, 0, 10, 0, 0, 5, 0x6d, 0x74, 0, 0, 0, 1, 1, 1, 2}
+	if !slices.Equal(got, want) {
+		t.Fatalf("Reply() = %v, want %v", got, want)
+	}
+}
+
 func TestMaster_JoinSearchAfterCreation_FindsTheNewestMatchingRoom(t *testing.T) {
-	master := matching.NewMaster()
+	master := matching.NewMaster(netip.AddrPort{})
 	master.Reply(lan, searchQuery("1", "2"))
 	master.Reply(lan, searchQuery("2", "2"))
 
-	got := master.Reply(net.IPv4(192, 168, 1, 21), searchQuery("3", "5"))
+	got := master.Reply(netip.AddrFrom4([4]byte{192, 168, 1, 21}), searchQuery("3", "5"))
 
 	want := []byte{0, 0, 0, 3, 1, 1, 0, 192, 168, 1, 20, 0x6d, 0x6f, 0, 0, 0, 2, 1, 1, 2}
 	if !slices.Equal(got, want) {
@@ -70,7 +81,7 @@ func TestMaster_JoinSearchAfterCreation_FindsTheNewestMatchingRoom(t *testing.T)
 }
 
 func TestMaster_JoinSearchWithADifferentDifficulty_FindsNothing(t *testing.T) {
-	master := matching.NewMaster()
+	master := matching.NewMaster(netip.AddrPort{})
 	master.Reply(lan, searchQuery("1", "2"))
 	other := searchQuery("2", "5")
 	other.Fields["difficulty"] = "3"
@@ -83,7 +94,7 @@ func TestMaster_JoinSearchWithADifferentDifficulty_FindsNothing(t *testing.T) {
 }
 
 func TestMaster_OtherQueries_NeedNoAnswer(t *testing.T) {
-	got := matching.NewMaster().Reply(net.IPv4(127, 0, 0, 1), matching.Query{Type: '0', Fields: map[string]string{}})
+	got := matching.NewMaster(netip.AddrPort{}).Reply(netip.AddrFrom4([4]byte{127, 0, 0, 1}), matching.Query{Type: '0', Fields: map[string]string{}})
 
 	if got != nil {
 		t.Fatalf("Reply() = %v, want nil", got)

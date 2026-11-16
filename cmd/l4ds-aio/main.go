@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -32,7 +33,17 @@ func main() {
 	gameDir := flag.String("game-dir", "", "game install folder; its level table sets player levels (all players are level 1 without it)")
 	masterAddr := flag.String("master", ":27010", "UDP address of the matching master")
 	gameServerAddr := flag.String("game-server", "", "UDP address to log game server queries on, such as :27015; it blocks the game's own listen server there")
+	roomServer := flag.String("room-server", "", "IPv4 address and port of the dedicated server that hosts new rooms, such as 127.0.0.1:27020 (default: the creating machine's listen server on port 27015)")
 	flag.Parse()
+
+	var roomServerAddr netip.AddrPort
+	if *roomServer != "" {
+		var err error
+		if roomServerAddr, err = netip.ParseAddrPort(*roomServer); err != nil || !roomServerAddr.Addr().Is4() {
+			slog.Error("room-server must be an IPv4 address and port", "room-server", *roomServer)
+			os.Exit(1)
+		}
+	}
 
 	var levels *game.LevelTable
 	if *gameDir != "" {
@@ -80,7 +91,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer master.Close()
-	go matching.NewMaster().Serve(master)
+	go matching.NewMaster(roomServerAddr).Serve(master)
 
 	if *gameServerAddr != "" {
 		gameServer, err := net.ListenPacket("udp", *gameServerAddr)
