@@ -40,11 +40,11 @@ func TestHandler_Svp_ReturnsThePlayerId(t *testing.T) {
 	}
 }
 
-func TestHandler_Login_SucceedsWithNoBonuses(t *testing.T) {
-	got := post("/login", "mac_addr=020000000001&player_id=1&chara_id=3&svp=0&rev_customize=0")
+func TestHandler_Login_ReturnsTheDefaultSettingsAfterTheEmptyGroups(t *testing.T) {
+	got := strings.Split(post("/login", "mac_addr=020000000001&player_id=1"), "\n")
 
-	if got != "1\n1\n0\n" {
-		t.Fatalf("body = %q", got)
+	if got[0] != "1" || got[3] != "0" || got[7] != "0" || got[8] != "5" || got[12] != "3" {
+		t.Fatalf("lines = %q", got)
 	}
 }
 
