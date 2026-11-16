@@ -48,8 +48,8 @@ func TestHandler_Login_SucceedsWithNoBonuses(t *testing.T) {
 	}
 }
 
-func TestHandler_ChapterLifecycle_AcceptsStart(t *testing.T) {
-	for _, path := range []string{"/loading_start", "/chapter_start"} {
+func TestHandler_ChapterLifecycle_AcceptsEachStage(t *testing.T) {
+	for _, path := range []string{"/loading_start", "/chapter_start", "/result"} {
 		got := post(path, "player_id=1")
 
 		if got != "1\n1\n0\n" {

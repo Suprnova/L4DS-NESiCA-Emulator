@@ -12,6 +12,7 @@ func Handler() http.Handler {
 	mux.HandleFunc("POST /login", reply("1\n1\n0\n"))
 	mux.HandleFunc("POST /loading_start", reply("1\n1\n0\n"))
 	mux.HandleFunc("POST /chapter_start", reply("1\n1\n0\n"))
+	mux.HandleFunc("POST /result", reply("1\n1\n0\n"))
 	mux.HandleFunc("POST /svp", svp)
 	return mux
 }
