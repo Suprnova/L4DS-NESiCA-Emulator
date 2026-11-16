@@ -31,7 +31,7 @@ func main() {
 	dbPath := flag.String("db", "l4ds.db", "SQLite database holding the players")
 	gameDir := flag.String("game-dir", "", "game install folder; its level table sets player levels (all players are level 1 without it)")
 	masterAddr := flag.String("master", ":27010", "UDP address of the matching master")
-	gameServerAddr := flag.String("game-server", ":27015", "UDP address rooms are advertised on")
+	gameServerAddr := flag.String("game-server", "", "UDP address to log game server queries on, such as :27015; it blocks the game's own listen server there")
 	flag.Parse()
 
 	var levels *game.LevelTable
@@ -82,13 +82,15 @@ func main() {
 	defer master.Close()
 	go matching.NewMaster().Serve(master)
 
-	gameServer, err := net.ListenPacket("udp", *gameServerAddr)
-	if err != nil {
-		slog.Error("listen for game server queries", "address", *gameServerAddr, "error", err)
-		os.Exit(1)
+	if *gameServerAddr != "" {
+		gameServer, err := net.ListenPacket("udp", *gameServerAddr)
+		if err != nil {
+			slog.Error("listen for game server queries", "address", *gameServerAddr, "error", err)
+			os.Exit(1)
+		}
+		defer gameServer.Close()
+		go matching.ServeGameServer(gameServer)
 	}
-	defer gameServer.Close()
-	go matching.ServeGameServer(gameServer)
 
 	slog.Info("serving", "pipe", *path, "server-key", *serverKey)
 	for {
