@@ -43,7 +43,9 @@ func ParseQuery(datagram []byte) (Query, bool) {
 }
 
 // Reply returns the answer to a query, or nil when it needs none. Every list query is answered
-// with an empty list.
+// with an empty list. A reply carries no type byte: the game reads it according to the type of
+// its last request, so a list reply is the big-endian sequence number followed by the error
+// code.
 func Reply(query Query) []byte {
 	if query.Type != listQuery {
 		return nil
@@ -53,7 +55,7 @@ func Reply(query Query) []byte {
 	if err != nil {
 		return nil
 	}
-	return []byte{listQuery, byte(sequence >> 24), byte(sequence >> 16), byte(sequence >> 8), byte(sequence), errEmptyList}
+	return []byte{byte(sequence >> 24), byte(sequence >> 16), byte(sequence >> 8), byte(sequence), errEmptyList}
 }
 
 // Serve answers queries arriving on conn until it is closed.

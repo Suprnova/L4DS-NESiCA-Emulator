@@ -30,7 +30,7 @@ func TestReply_ListQuery_AnswersWithAnEmptyListForTheSequence(t *testing.T) {
 
 	got := matching.Reply(query)
 
-	want := []byte{'2', 0, 0, 1, 2, 0x7e}
+	want := []byte{0, 0, 1, 2, 0x7e}
 	if !slices.Equal(got, want) {
 		t.Fatalf("Reply() = %v, want %v", got, want)
 	}
