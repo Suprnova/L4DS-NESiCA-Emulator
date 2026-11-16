@@ -46,9 +46,9 @@ func (s *Server) Select(cardID string) (wire.CardReply, error) {
 	return wire.CardReply{Status: 1, Body: body.String()}, nil
 }
 
-// ReissueTest answers that no card was reissued from another card.
+// ReissueTest answers that no reissue is reserved for the card.
 func (s *Server) ReissueTest(cardID string) (wire.CardReply, error) {
-	return wire.CardReply{Status: 1, Body: "0\n1\n" + cardID + "\n"}, nil
+	return wire.CardReply{Status: wire.CardStatusNoReissue, Body: "0\n1\n" + cardID + "\n"}, nil
 }
 
 // Insert registers a player to a card from the game's key=value text, as in

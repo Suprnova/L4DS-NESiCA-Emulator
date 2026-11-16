@@ -8,6 +8,10 @@ const cardIDSize = 16
 // player.
 const CardStatusUnregistered uint32 = 0x17
 
+// CardStatusNoReissue is the card reply status of the card server for a card that is not the
+// target of a reissue reservation.
+const CardStatusNoReissue uint32 = 0x1b
+
 // ParseCardID reads the card number that starts every card command payload.
 func ParseCardID(payload []byte) (string, error) {
 	if len(payload) < cardIDSize {

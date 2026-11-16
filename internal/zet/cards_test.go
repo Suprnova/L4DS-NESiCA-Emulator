@@ -60,12 +60,12 @@ func TestServer_Select_UnregisteredCard_ReportsTheUnregisteredStatus(t *testing.
 	}
 }
 
-func TestServer_ReissueTest_ReportsNoReissue(t *testing.T) {
+func TestServer_ReissueTest_ReportsNoReservation(t *testing.T) {
 	server, _ := newServer(t)
 
 	reply, err := server.ReissueTest("7020392000000009")
 
-	if err != nil || reply.Status != 1 || reply.Body != "0\n1\n7020392000000009\n" {
+	if err != nil || reply.Status != wire.CardStatusNoReissue || reply.Body != "0\n1\n7020392000000009\n" {
 		t.Fatalf("ReissueTest() = %+v, %v", reply, err)
 	}
 }
