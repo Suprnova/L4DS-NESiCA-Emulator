@@ -14,6 +14,7 @@ import (
 	"l4ds-nesica-emulator/internal/nesys"
 	"l4ds-nesica-emulator/internal/pipe"
 	"l4ds-nesica-emulator/internal/wire"
+	"l4ds-nesica-emulator/internal/zet"
 )
 
 func main() {
@@ -28,6 +29,7 @@ func main() {
 		Adapter:        wire.AdapterDetails{IP: "127.0.0.1", MAC: "020000000001"},
 		Public:         wire.PublicAddress{IP: "127.0.0.1"},
 		ServiceVersion: "2.79 2014/07/08",
+		HTTP:           zet.Handler(),
 	}
 
 	listener, err := pipe.Listen(*path)
