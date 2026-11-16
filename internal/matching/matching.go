@@ -5,6 +5,7 @@ package matching
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"log/slog"
 	"net"
 	"slices"
@@ -168,5 +169,18 @@ func (m *Master) Serve(conn net.PacketConn) {
 				conn.WriteTo(reply, from)
 			}
 		}
+	}
+}
+
+// ServeGameServer logs every datagram arriving on conn, the port rooms are advertised on, until
+// it is closed.
+func ServeGameServer(conn net.PacketConn) {
+	buffer := make([]byte, maxDatagram)
+	for {
+		n, from, err := conn.ReadFrom(buffer)
+		if err != nil {
+			return
+		}
+		slog.Info("game server datagram", "from", from.String(), "bytes", n, "hex", fmt.Sprintf("%x", buffer[:n]), "text", fmt.Sprintf("%q", buffer[:n]))
 	}
 }
