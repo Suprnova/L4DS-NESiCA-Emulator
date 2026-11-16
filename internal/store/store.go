@@ -4,19 +4,24 @@ package store
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 
 	_ "modernc.org/sqlite"
 )
 
-const schema = `
-CREATE TABLE IF NOT EXISTS players (
-	id      INTEGER PRIMARY KEY,
-	card_id TEXT    NOT NULL UNIQUE,
-	name    TEXT    NOT NULL,
-	zet     INTEGER NOT NULL DEFAULT 0,
-	exp     INTEGER NOT NULL DEFAULT 0,
-	score   INTEGER NOT NULL DEFAULT 0
-)`
+// migrations holds the schema changes in order. The database's user_version is the number of
+// migrations already applied.
+var migrations = []string{
+	`CREATE TABLE IF NOT EXISTS players (
+		id      INTEGER PRIMARY KEY,
+		card_id TEXT    NOT NULL UNIQUE,
+		name    TEXT    NOT NULL,
+		zet     INTEGER NOT NULL DEFAULT 0,
+		exp     INTEGER NOT NULL DEFAULT 0,
+		score   INTEGER NOT NULL DEFAULT 0
+	)`,
+	`ALTER TABLE players ADD COLUMN logins INTEGER NOT NULL DEFAULT 0`,
+}
 
 // DefaultName is the name of a player created by their first card scan.
 const DefaultName = "Survivor"
@@ -29,6 +34,7 @@ type Player struct {
 	Zet    int64
 	Exp    int64
 	Score  int64
+	Logins int64
 }
 
 // Result is what a finished chapter adds to a player's totals.
@@ -43,8 +49,8 @@ type Store struct {
 	db *sql.DB
 }
 
-// Open opens the database at path, creating it and its schema when missing. Use ":memory:" for
-// a database that lives as long as the store.
+// Open opens the database at path, creating it and applying any missing schema changes. Use
+// ":memory:" for a database that lives as long as the store.
 func Open(path string) (*Store, error) {
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
@@ -52,11 +58,28 @@ func Open(path string) (*Store, error) {
 	}
 
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(schema); err != nil {
+	if err := migrate(db); err != nil {
 		db.Close()
 		return nil, err
 	}
 	return &Store{db: db}, nil
+}
+
+func migrate(db *sql.DB) error {
+	var applied int
+	if err := db.QueryRow(`PRAGMA user_version`).Scan(&applied); err != nil {
+		return err
+	}
+
+	for i := applied; i < len(migrations); i++ {
+		if _, err := db.Exec(migrations[i]); err != nil {
+			return err
+		}
+		if _, err := db.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, i+1)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Close closes the database.
@@ -76,8 +99,17 @@ func (s *Store) Player(id int64) (Player, error) { return s.player(`id = ?`, id)
 
 // RecordResult adds a finished chapter to a player's totals.
 func (s *Store) RecordResult(playerID int64, result Result) error {
-	outcome, err := s.db.Exec(`UPDATE players SET zet = zet + ?, exp = exp + ?, score = score + ? WHERE id = ?`,
+	return s.updatePlayer(`UPDATE players SET zet = zet + ?, exp = exp + ?, score = score + ? WHERE id = ?`,
 		result.Zet, result.Exp, result.Score, playerID)
+}
+
+// RecordLogin counts one more login for a player.
+func (s *Store) RecordLogin(playerID int64) error {
+	return s.updatePlayer(`UPDATE players SET logins = logins + 1 WHERE id = ?`, playerID)
+}
+
+func (s *Store) updatePlayer(query string, args ...any) error {
+	outcome, err := s.db.Exec(query, args...)
 	if err != nil {
 		return err
 	}
@@ -89,7 +121,7 @@ func (s *Store) RecordResult(playerID int64, result Result) error {
 
 func (s *Store) player(where string, arg any) (Player, error) {
 	var player Player
-	err := s.db.QueryRow(`SELECT id, card_id, name, zet, exp, score FROM players WHERE `+where, arg).
-		Scan(&player.ID, &player.CardID, &player.Name, &player.Zet, &player.Exp, &player.Score)
+	err := s.db.QueryRow(`SELECT id, card_id, name, zet, exp, score, logins FROM players WHERE `+where, arg).
+		Scan(&player.ID, &player.CardID, &player.Name, &player.Zet, &player.Exp, &player.Score, &player.Logins)
 	return player, err
 }
