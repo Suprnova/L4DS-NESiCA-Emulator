@@ -1,7 +1,10 @@
 package nesys_test
 
 import (
+	"encoding/binary"
+	"fmt"
 	"net"
+	"net/http"
 	"testing"
 
 	"l4ds-nesica-emulator/internal/nesys"
@@ -79,6 +82,48 @@ func TestServe_QueryCommands_ReplyWithMatchingCommandAndSize(t *testing.T) {
 		if reply.Command != test.reply || len(reply.Payload) != test.size {
 			t.Errorf("command %#x: reply = %#x with %d bytes, want %#x with %d", test.request, reply.Command, len(reply.Payload), test.reply, test.size)
 		}
+	}
+}
+
+func httpPostPayload(url, body string) []byte {
+	payload := make([]byte, 0xC59+len(body))
+	copy(payload, url)
+	binary.LittleEndian.PutUint32(payload[0x848:], 5)
+	binary.LittleEndian.PutUint32(payload[0x854:], uint32(len(body)))
+	copy(payload[0xC59:], body)
+	return payload
+}
+
+func TestServe_HTTPPost_RunsTheHandlerAndRepliesWithItsBody(t *testing.T) {
+	config := testConfig
+	config.HTTP = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.ParseForm()
+		fmt.Fprintf(w, "%s|%s", r.URL.Path, r.PostForm.Get("version"))
+	})
+	game, service := net.Pipe()
+	defer game.Close()
+	go nesys.Serve(service, config)
+
+	start := exchange(t, game, wire.HTTPPost, httpPostPayload("http://lobby/sendversion", "tenpo_id=1&version=1.2604"))
+	reply, err := wire.ReadFrame(game)
+
+	if start.Command != wire.HTTPStart || err != nil || reply.Command != wire.HTTPReply {
+		t.Fatalf("replies = %+v, %+v, %v", start, reply, err)
+	}
+	if got := string(reply.Payload[0x414:]); got != "/sendversion|1.2604" ||
+		binary.LittleEndian.Uint32(reply.Payload[0x404:]) != 200 || binary.LittleEndian.Uint32(reply.Payload[0x40C:]) != 5 {
+		t.Fatalf("reply body = %q, payload head = % X", got, reply.Payload[0x400:0x414])
+	}
+}
+
+func TestServe_HTTPPostWithoutHandler_RepliesWithAnErrorCode(t *testing.T) {
+	game := startGame(t)
+
+	exchange(t, game, wire.HTTPPost, httpPostPayload("http://lobby/login", ""))
+	reply, err := wire.ReadFrame(game)
+
+	if err != nil || binary.LittleEndian.Uint32(reply.Payload[0x408:]) == 0 {
+		t.Fatalf("reply = %+v, %v", reply, err)
 	}
 }
 

@@ -3,8 +3,11 @@
 package nesys
 
 import (
+	"bytes"
 	"errors"
 	"io"
+	"net/http"
+	"net/http/httptest"
 
 	"l4ds-nesica-emulator/internal/wire"
 )
@@ -17,6 +20,10 @@ type Config struct {
 	Adapter        wire.AdapterDetails
 	Public         wire.PublicAddress
 	ServiceVersion string
+
+	// HTTP answers the requests the game tunnels through the service. A nil handler makes
+	// every tunnelled request fail with an error code.
+	HTTP http.Handler
 }
 
 // Serve answers the game's commands on conn until the game ends the session or the
@@ -62,9 +69,35 @@ func respond(config Config, request wire.Frame) []wire.Frame {
 		return []wire.Frame{{Command: wire.GlobalAddressReply, Payload: config.Public.Encode()}}
 	case wire.RowEventDataList:
 		return []wire.Frame{{Command: wire.RowEventDataReply, Payload: wire.EmptyEventList()}}
+	case wire.HTTPPost:
+		return tunnel(config.HTTP, request.Payload)
 	case wire.ClientEnd:
 		return []wire.Frame{{Command: wire.ClientEndReply}}
 	default:
 		return nil
+	}
+}
+
+// tunnelFailure is the error code reported when a tunnelled request cannot be answered.
+const tunnelFailure = 1
+
+func tunnel(handler http.Handler, payload []byte) []wire.Frame {
+	request, err := wire.ParseHTTPRequest(payload)
+	if err != nil {
+		return nil
+	}
+
+	response := wire.HTTPResponse{Sequence: request.Sequence, ErrorCode: tunnelFailure}
+	if handler != nil {
+		recorder := httptest.NewRecorder()
+		httpRequest := httptest.NewRequest(http.MethodPost, request.URL, bytes.NewReader(request.Body))
+		httpRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		handler.ServeHTTP(recorder, httpRequest)
+		response = wire.HTTPResponse{StatusCode: uint32(recorder.Code), Sequence: request.Sequence, Body: recorder.Body.Bytes()}
+	}
+
+	return []wire.Frame{
+		{Command: wire.HTTPStart, Payload: wire.HTTPStartPayload()},
+		{Command: wire.HTTPReply, Payload: response.Encode()},
 	}
 }
