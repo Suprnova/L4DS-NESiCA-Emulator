@@ -58,6 +58,10 @@ func (s *Server) result(w http.ResponseWriter, r *http.Request) {
 		Zet:   formInt(r, "zet"),
 		Exp:   formInt(r, "exp"),
 		Score: formInt(r, "TOTAL_SCORE"),
+
+		StageID:   formInt(r, "stage_id"),
+		ChapterID: formInt(r, "chapter_id"),
+		Cleared:   formInt(r, "clear_flag") == 1,
 	}
 
 	if err := s.store.RecordResult(playerID, result); err != nil {

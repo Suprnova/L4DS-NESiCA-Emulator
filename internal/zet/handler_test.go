@@ -3,6 +3,7 @@ package zet_test
 import (
 	"fmt"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -86,5 +87,20 @@ func TestHandler_Login_CountsTheLogin(t *testing.T) {
 	updated, _ := s.Player(player.ID)
 	if updated.Logins != 1 {
 		t.Fatalf("logins = %d", updated.Logins)
+	}
+}
+
+func TestHandler_Login_ReportsClearedStagesAfterTheConfig(t *testing.T) {
+	server, s := newServer(t)
+	player, _ := s.Register("7020392000000001", "Survivor", 0)
+	postTo(server, "/result", fmt.Sprintf("player_id=%d&stage_id=1&chapter_id=1&clear_flag=1", player.ID))
+	postTo(server, "/result", fmt.Sprintf("player_id=%d&stage_id=1&chapter_id=2&clear_flag=1", player.ID))
+
+	lines := strings.Split(postTo(server, "/login", fmt.Sprintf("player_id=%d", player.ID)), "\n")
+
+	got := lines[3+5+25+5:]
+	want := []string{"1", "1", "1", "2", "0", "2", "1", "1", "0", "2", "1", "0", ""}
+	if !slices.Equal(got, want) {
+		t.Fatalf("stage lines = %q, want %q", got, want)
 	}
 }
