@@ -4,10 +4,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"flag"
+	"io"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 
@@ -29,7 +32,7 @@ func main() {
 		Adapter:        wire.AdapterDetails{IP: "127.0.0.1", MAC: "020000000001"},
 		Public:         wire.PublicAddress{IP: "127.0.0.1"},
 		ServiceVersion: "2.79 2014/07/08",
-		HTTP:           zet.Handler(),
+		HTTP:           logRequests(zet.Handler()),
 	}
 
 	listener, err := pipe.Listen(*path)
@@ -66,4 +69,13 @@ func serve(conn net.Conn, config nesys.Config) {
 		return
 	}
 	slog.Info("game disconnected")
+}
+
+func logRequests(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		slog.Info("http", "path", r.URL.Path, "body", string(body))
+		next.ServeHTTP(w, r)
+	})
 }
