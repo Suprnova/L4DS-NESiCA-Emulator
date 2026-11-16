@@ -61,13 +61,14 @@ const roomTTL = 10 * time.Minute
 
 // room is a room a cabinet has created on its listen server.
 type room struct {
-	id      uint32
-	host    net.IP
-	mode    string
-	rule    string
-	stage   string
-	level   string
-	created time.Time
+	id         uint32
+	host       net.IP
+	mode       string
+	rule       string
+	campaign   byte
+	chapter    byte
+	difficulty byte
+	created    time.Time
 }
 
 // Master tracks the rooms that cabinets have created and answers their queries.
@@ -115,7 +116,7 @@ func (m *Master) Reply(from net.IP, query Query) []byte {
 	reply = append(reply, found.host...)
 	reply = binary.BigEndian.AppendUint16(reply, advertisedPort)
 	reply = binary.BigEndian.AppendUint32(reply, found.id)
-	return append(reply, 0, 0, 0)
+	return append(reply, found.campaign, found.chapter, found.difficulty)
 }
 
 func (m *Master) create(host net.IP, query Query) room {
@@ -123,17 +124,24 @@ func (m *Master) create(host net.IP, query Query) room {
 	defer m.mu.Unlock()
 
 	created := room{
-		id:      m.nextRoomID,
-		host:    host,
-		mode:    query.Fields["mode"],
-		rule:    query.Fields["rule"],
-		stage:   query.Fields["stage"],
-		level:   query.Fields["difficulty"],
-		created: m.now(),
+		id:         m.nextRoomID,
+		host:       host,
+		mode:       query.Fields["mode"],
+		rule:       query.Fields["rule"],
+		campaign:   max(number(query.Fields["stage"]), 1),
+		chapter:    max(number(query.Fields["chapter"]), 1),
+		difficulty: number(query.Fields["difficulty"]) + 1,
+		created:    m.now(),
 	}
 	m.nextRoomID++
 	m.rooms = append(m.rooms, created)
 	return created
+}
+
+// number parses a small decimal query field, reading anything else as 0.
+func number(text string) byte {
+	value, _ := strconv.ParseUint(text, 10, 8)
+	return byte(value)
 }
 
 func (m *Master) find(query Query) (room, bool) {
@@ -142,7 +150,7 @@ func (m *Master) find(query Query) (room, bool) {
 
 	m.rooms = slices.DeleteFunc(m.rooms, func(r room) bool { return m.now().Sub(r.created) > roomTTL })
 	for _, candidate := range slices.Backward(m.rooms) {
-		if candidate.mode == query.Fields["mode"] && candidate.rule == query.Fields["rule"] && candidate.level == query.Fields["difficulty"] {
+		if candidate.mode == query.Fields["mode"] && candidate.rule == query.Fields["rule"] && candidate.difficulty == number(query.Fields["difficulty"])+1 {
 			return candidate, true
 		}
 	}

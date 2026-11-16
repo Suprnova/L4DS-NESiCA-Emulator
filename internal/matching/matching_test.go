@@ -29,7 +29,7 @@ func TestParseQuery_EmptyDatagram_IsRejected(t *testing.T) {
 var lan = net.IPv4(192, 168, 1, 20)
 
 func searchQuery(sequence, room string) matching.Query {
-	return matching.Query{Type: '2', Fields: map[string]string{"seqNo": sequence, "room": room, "mode": "1", "rule": "1", "difficulty": "1", "stage": "1"}}
+	return matching.Query{Type: '2', Fields: map[string]string{"seqNo": sequence, "room": room, "mode": "1", "rule": "1", "difficulty": "1", "stage": "1", "chapter": "1"}}
 }
 
 func TestMaster_JoinSearchWithNoRooms_AnswersWithAnEmptyList(t *testing.T) {
@@ -47,7 +47,7 @@ func TestMaster_NewRoomQuery_CreatesARoomOnTheAskingMachine(t *testing.T) {
 	first := master.Reply(lan, searchQuery("13", "2"))
 	second := master.Reply(lan, searchQuery("14", "2"))
 
-	want := []byte{0, 0, 0, 13, 1, 1, 0, 192, 168, 1, 20, 0x6d, 0x6f, 0, 0, 0, 1, 0, 0, 0}
+	want := []byte{0, 0, 0, 13, 1, 1, 0, 192, 168, 1, 20, 0x6d, 0x6f, 0, 0, 0, 1, 1, 1, 2}
 	if !slices.Equal(first, want) {
 		t.Fatalf("Reply() = %v, want %v", first, want)
 	}
@@ -63,7 +63,7 @@ func TestMaster_JoinSearchAfterCreation_FindsTheNewestMatchingRoom(t *testing.T)
 
 	got := master.Reply(net.IPv4(192, 168, 1, 21), searchQuery("3", "5"))
 
-	want := []byte{0, 0, 0, 3, 1, 1, 0, 192, 168, 1, 20, 0x6d, 0x6f, 0, 0, 0, 2, 0, 0, 0}
+	want := []byte{0, 0, 0, 3, 1, 1, 0, 192, 168, 1, 20, 0x6d, 0x6f, 0, 0, 0, 2, 1, 1, 2}
 	if !slices.Equal(got, want) {
 		t.Fatalf("Reply() = %v, want %v", got, want)
 	}
