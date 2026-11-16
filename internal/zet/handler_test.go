@@ -1,6 +1,7 @@
 package zet_test
 
 import (
+	"fmt"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -55,11 +56,23 @@ func TestHandler_Login_ReturnsTheDefaultSettingsAfterTheEmptyGroups(t *testing.T
 }
 
 func TestHandler_ChapterLifecycle_AcceptsEachStage(t *testing.T) {
-	for _, path := range []string{"/loading_start", "/chapter_start", "/result"} {
+	for _, path := range []string{"/loading_start", "/chapter_start"} {
 		got := post(t, path, "player_id=1")
 
 		if got != "1\n1\n0\n" {
 			t.Fatalf("%s body = %q", path, got)
 		}
+	}
+}
+
+func TestHandler_Result_AddsTheChapterToThePlayersTotals(t *testing.T) {
+	server, s := newServer(t)
+	player, _ := s.PlayerByCard("7020392000000001")
+
+	got := postTo(server, "/result", fmt.Sprintf("player_id=%d&zet=568&exp=222&TOTAL_SCORE=195", player.ID))
+
+	updated, _ := s.Player(player.ID)
+	if got != "1\n1\n0\n" || updated.Zet != 568 || updated.Exp != 222 || updated.Score != 195 {
+		t.Fatalf("body = %q, player = %+v", got, updated)
 	}
 }
