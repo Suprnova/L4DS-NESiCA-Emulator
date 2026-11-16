@@ -98,7 +98,7 @@ func TestHandler_Login_ReportsClearedStagesAfterTheConfig(t *testing.T) {
 
 	lines := strings.Split(postTo(server, "/login", fmt.Sprintf("player_id=%d", player.ID)), "\n")
 
-	got := lines[3+5+25+5:]
+	got := lines[3+5+25+4:]
 	want := []string{"1", "1", "1", "2", "0", "2", "1", "1", "0", "2", "1", "0", ""}
 	if !slices.Equal(got, want) {
 		t.Fatalf("stage lines = %q, want %q", got, want)

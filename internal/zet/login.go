@@ -25,8 +25,9 @@ var defaultConfig = []int{
 }
 
 // unusedLoginLines are the lines between the config and the stage progress: force_exit,
-// todays_login_count, next_thru_login_bonus_count, zet_lose_amount and zet_lose_time.
-const unusedLoginLines = 5
+// todays_login_count, next_thru_login_bonus_count and zet_lose_amount. The game reads
+// zet_lose_time only when the amount is above zero.
+const unusedLoginLines = 4
 
 // stageLines lists the stage_infos group: the number of stages, then for each stage its id,
 // cleared flag, highest reached chapter, remaining title count and chapter count, followed by
