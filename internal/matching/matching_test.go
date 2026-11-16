@@ -111,6 +111,38 @@ func TestMaster_JoinSearch_SkipsRoomsWhoseServerStopped(t *testing.T) {
 	}
 }
 
+func TestMaster_EnterRoomAfterASearch_ReturnsTheFoundRoomWithoutCreatingOne(t *testing.T) {
+	server := netip.MustParseAddrPort("127.0.0.2:27020")
+	hosts := &fakeHosts{free: []netip.AddrPort{server, netip.MustParseAddrPort("127.0.0.2:27021")}}
+	master := matching.NewMaster(hosts)
+	master.Reply(lan, searchQuery("1", "2"))
+	master.Reply(lan, searchQuery("2", "5"))
+
+	got := master.Reply(lan, searchQuery("3", "3"))
+
+	want := []byte{0, 0, 0, 3, 1, 1, 0, 127, 0, 0, 2, 0x6d, 0x74, 0, 0, 0, 1, 1, 1, 2}
+	if !slices.Equal(got, want) || len(hosts.free) != 1 {
+		t.Fatalf("Reply() = %v, want %v; servers left = %d, want 1", got, want, len(hosts.free))
+	}
+}
+
+func TestMaster_EnterRoomWithNoRoom_AnswersRoomLost(t *testing.T) {
+	got := matching.NewMaster(nil).Reply(lan, searchQuery("3", "3"))
+
+	want := []byte{0, 0, 0, 3, 0x7d}
+	if !slices.Equal(got, want) {
+		t.Fatalf("Reply() = %v, want %v", got, want)
+	}
+}
+
+func TestMaster_UnknownRoomRequest_NeedsNoAnswer(t *testing.T) {
+	got := matching.NewMaster(nil).Reply(lan, searchQuery("3", "9"))
+
+	if got != nil {
+		t.Fatalf("Reply() = %v, want nil", got)
+	}
+}
+
 func TestMaster_JoinSearchAfterCreation_FindsTheNewestMatchingRoom(t *testing.T) {
 	master := matching.NewMaster(nil)
 	master.Reply(lan, searchQuery("1", "2"))

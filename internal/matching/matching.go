@@ -20,13 +20,16 @@ const (
 	listQuery = '2'
 
 	// Reply error codes. The matching window treats errOK as success, errEmptyList as "no room
-	// found" and every other value as a failure (errNoServer, 0x7c room full, 0x7d room lost).
+	// found" and every other value as a failure (errNoServer, 0x7c room full, errRoomLost).
 	errOK        = 1
 	errNoServer  = 0x7a
+	errRoomLost  = 0x7d
 	errEmptyList = 0x7e
 
-	// joinSearch is the value of the room field in a search for a room to join. The value 2
-	// asks for a new room.
+	// Values of the room field. A search for a room to join that finds one is followed by a
+	// request to enter it, with the same fields and room_id 0.
+	newRoom    = "2"
+	enterRoom  = "3"
 	joinSearch = "5"
 
 	// gamePort is the port of a cabinet's own listen server.
@@ -117,6 +120,8 @@ func NewMaster(hosts Hosts) *Master {
 // A query for a new room (room 2) creates a room and returns it, or answers "no server" when no
 // server is available. A search for a room to join (room 5) returns the newest listed room that
 // fits the query's mode, rule and difficulty and whose server still hosts it, or an empty list.
+// A request to enter the room a search found (room 3) returns the same room, or "room lost" when
+// it is gone. Other room values get no answer.
 func (m *Master) Reply(from netip.Addr, query Query) []byte {
 	if query.Type != listQuery {
 		return nil
@@ -130,12 +135,22 @@ func (m *Master) Reply(from netip.Addr, query Query) []byte {
 
 	var found room
 	var ok bool
-	if query.Fields["room"] == joinSearch {
+	switch query.Fields["room"] {
+	case joinSearch:
 		if found, ok = m.find(query); !ok {
 			return append(reply, errEmptyList)
 		}
-	} else if found, ok = m.create(from.Unmap(), query); !ok {
-		return append(reply, errNoServer)
+	case enterRoom:
+		if found, ok = m.find(query); !ok {
+			return append(reply, errRoomLost)
+		}
+	case newRoom:
+		if found, ok = m.create(from.Unmap(), query); !ok {
+			return append(reply, errNoServer)
+		}
+	default:
+		slog.Warn("unknown matching room request", "room", query.Fields["room"])
+		return nil
 	}
 
 	reply = append(reply, errOK, 1, 0)
