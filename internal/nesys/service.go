@@ -50,7 +50,7 @@ func Serve(conn io.ReadWriter, config Config) error {
 			return err
 		}
 
-		slog.Info("command", "id", fmt.Sprintf("%#x", uint32(request.Command)), "payload", len(request.Payload))
+		slog.Info("command", "id", fmt.Sprintf("%#x", uint32(request.Command)), "payload", len(request.Payload), "head", fmt.Sprintf("%x", request.Payload[:min(len(request.Payload), 32)]))
 
 		for _, reply := range respond(config, request) {
 			if _, err := conn.Write(reply.Encode()); err != nil {
@@ -87,6 +87,8 @@ func respond(config Config, request wire.Frame) []wire.Frame {
 		return tunnel(config.HTTP, request.Payload)
 	case wire.GameStart:
 		return []wire.Frame{{Command: wire.GameStatusReply, Payload: []byte{1, 0, 0, 0}}}
+	case wire.IncomeStart:
+		return []wire.Frame{{Command: wire.IncomeStatusReply, Payload: []byte{1, 0, 0, 0, 1, 0, 0, 0}}}
 	case wire.CardSelect:
 		return selectCard(config.Cards, request.Payload)
 	case wire.ClientEnd:
