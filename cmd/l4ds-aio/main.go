@@ -79,7 +79,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer master.Close()
-	go matching.Serve(master)
+	go matching.NewMaster().Serve(master)
 
 	slog.Info("serving", "pipe", *path, "server-key", *serverKey)
 	for {
