@@ -4,6 +4,18 @@ import "encoding/binary"
 
 const cardIDSize = 16
 
+// CardStatusUnregistered is the card reply status of the card server for a card with no
+// player.
+const CardStatusUnregistered uint32 = 0x17
+
+// ParseCardID reads the card number that starts every card command payload.
+func ParseCardID(payload []byte) (string, error) {
+	if len(payload) < cardIDSize {
+		return "", ErrBadFrame
+	}
+	return getString(payload[:cardIDSize]), nil
+}
+
 // CardSelectRequest is the payload of the CardSelect command: a lookup of the player
 // registered to a card.
 type CardSelectRequest struct {

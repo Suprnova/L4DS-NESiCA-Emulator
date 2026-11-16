@@ -64,3 +64,14 @@ func TestParseCardWriteRequest_DataLongerThanPayload_ReturnsErrBadFrame(t *testi
 		t.Fatalf("error = %v, want ErrBadFrame", err)
 	}
 }
+
+func TestParseCardID_ReadsTheLeadingCardNumber(t *testing.T) {
+	payload := make([]byte, 20)
+	copy(payload, "7020392000000001")
+
+	got, err := wire.ParseCardID(payload)
+
+	if err != nil || got != "7020392000000001" {
+		t.Fatalf("ParseCardID() = %q, %v", got, err)
+	}
+}
