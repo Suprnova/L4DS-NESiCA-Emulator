@@ -20,8 +20,9 @@ const (
 	listQuery = '2'
 
 	// Reply error codes. The matching window treats errOK as success, errEmptyList as "no room
-	// found" and every other value as a failure (0x7a no server, 0x7c room full, 0x7d room lost).
+	// found" and every other value as a failure (errNoServer, 0x7c room full, 0x7d room lost).
 	errOK        = 1
+	errNoServer  = 0x7a
 	errEmptyList = 0x7e
 
 	// joinSearch is the value of the room field in a search for a room to join. The value 2
@@ -76,19 +77,36 @@ type room struct {
 	created    time.Time
 }
 
+// Hosts provides the game servers that host new rooms.
+type Hosts interface {
+	// Host returns the address of a server for a new room, or false when none is available.
+	Host() (netip.AddrPort, bool)
+	// Hosting reports whether the server at address still hosts its room.
+	Hosting(address netip.AddrPort) bool
+}
+
+// FixedHost hosts every room on one game server, such as a dedicated server started by hand.
+type FixedHost netip.AddrPort
+
+// Host returns the server's address.
+func (h FixedHost) Host() (netip.AddrPort, bool) { return netip.AddrPort(h), true }
+
+// Hosting reports true: the server is assumed to keep running.
+func (h FixedHost) Hosting(netip.AddrPort) bool { return true }
+
 // Master tracks the rooms that cabinets have created and answers their queries.
 type Master struct {
 	mu         sync.Mutex
 	rooms      []room
 	nextRoomID uint32
-	server     netip.AddrPort
+	hosts      Hosts
 	now        func() time.Time
 }
 
-// NewMaster returns a master with no rooms. New rooms are hosted by the game server at server,
-// or by the asking machine's own listen server on port 27015 when server is the zero value.
-func NewMaster(server netip.AddrPort) *Master {
-	return &Master{nextRoomID: 1, server: server, now: time.Now}
+// NewMaster returns a master with no rooms. New rooms are hosted by servers from hosts, or by
+// the asking machine's own listen server on port 27015 when hosts is nil.
+func NewMaster(hosts Hosts) *Master {
+	return &Master{nextRoomID: 1, hosts: hosts, now: time.Now}
 }
 
 // Reply returns the answer to a query from the machine at from, or nil when it needs none. A
@@ -96,9 +114,9 @@ func NewMaster(server netip.AddrPort) *Master {
 // a list reply is the big-endian sequence number, the error code, the number of entries, the
 // index of this entry and the entry itself.
 //
-// A query for a new room (room 2) creates a room and returns it. A search for a room to join
-// (room 5) returns the newest listed room that fits the query's mode, rule and difficulty, or an
-// empty list.
+// A query for a new room (room 2) creates a room and returns it, or answers "no server" when no
+// server is available. A search for a room to join (room 5) returns the newest listed room that
+// fits the query's mode, rule and difficulty and whose server still hosts it, or an empty list.
 func (m *Master) Reply(from netip.Addr, query Query) []byte {
 	if query.Type != listQuery {
 		return nil
@@ -111,13 +129,13 @@ func (m *Master) Reply(from netip.Addr, query Query) []byte {
 	reply := binary.BigEndian.AppendUint32(nil, uint32(sequence))
 
 	var found room
+	var ok bool
 	if query.Fields["room"] == joinSearch {
-		var ok bool
 		if found, ok = m.find(query); !ok {
 			return append(reply, errEmptyList)
 		}
-	} else {
-		found = m.create(from.Unmap(), query)
+	} else if found, ok = m.create(from.Unmap(), query); !ok {
+		return append(reply, errNoServer)
 	}
 
 	reply = append(reply, errOK, 1, 0)
@@ -127,13 +145,16 @@ func (m *Master) Reply(from netip.Addr, query Query) []byte {
 	return append(reply, found.campaign, found.chapter, found.difficulty)
 }
 
-func (m *Master) create(host netip.Addr, query Query) room {
+func (m *Master) create(host netip.Addr, query Query) (room, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	server := m.server
-	if !server.IsValid() {
-		server = netip.AddrPortFrom(host, gamePort)
+	server := netip.AddrPortFrom(host, gamePort)
+	if m.hosts != nil {
+		var ok bool
+		if server, ok = m.hosts.Host(); !ok {
+			return room{}, false
+		}
 	}
 	created := room{
 		id:         m.nextRoomID,
@@ -147,7 +168,7 @@ func (m *Master) create(host netip.Addr, query Query) room {
 	}
 	m.nextRoomID++
 	m.rooms = append(m.rooms, created)
-	return created
+	return created, true
 }
 
 // number parses a small decimal query field, reading anything else as 0.
@@ -160,7 +181,9 @@ func (m *Master) find(query Query) (room, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.rooms = slices.DeleteFunc(m.rooms, func(r room) bool { return m.now().Sub(r.created) > roomTTL })
+	m.rooms = slices.DeleteFunc(m.rooms, func(r room) bool {
+		return m.now().Sub(r.created) > roomTTL || m.hosts != nil && !m.hosts.Hosting(r.server)
+	})
 	for _, candidate := range slices.Backward(m.rooms) {
 		if candidate.mode == query.Fields["mode"] && candidate.rule == query.Fields["rule"] && candidate.difficulty == number(query.Fields["difficulty"])+1 {
 			return candidate, true

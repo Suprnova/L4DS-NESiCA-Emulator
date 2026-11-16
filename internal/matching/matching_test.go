@@ -33,7 +33,7 @@ func searchQuery(sequence, room string) matching.Query {
 }
 
 func TestMaster_JoinSearchWithNoRooms_AnswersWithAnEmptyList(t *testing.T) {
-	got := matching.NewMaster(netip.AddrPort{}).Reply(lan, searchQuery("258", "5"))
+	got := matching.NewMaster(nil).Reply(lan, searchQuery("258", "5"))
 
 	want := []byte{0, 0, 1, 2, 0x7e}
 	if !slices.Equal(got, want) {
@@ -42,7 +42,7 @@ func TestMaster_JoinSearchWithNoRooms_AnswersWithAnEmptyList(t *testing.T) {
 }
 
 func TestMaster_NewRoomQuery_CreatesARoomOnTheAskingMachine(t *testing.T) {
-	master := matching.NewMaster(netip.AddrPort{})
+	master := matching.NewMaster(nil)
 
 	first := master.Reply(lan, searchQuery("13", "2"))
 	second := master.Reply(lan, searchQuery("14", "2"))
@@ -57,7 +57,7 @@ func TestMaster_NewRoomQuery_CreatesARoomOnTheAskingMachine(t *testing.T) {
 }
 
 func TestMaster_NewRoomQueryWithAGameServer_CreatesTheRoomOnTheGameServer(t *testing.T) {
-	master := matching.NewMaster(netip.MustParseAddrPort("10.0.0.5:27020"))
+	master := matching.NewMaster(matching.FixedHost(netip.MustParseAddrPort("10.0.0.5:27020")))
 
 	got := master.Reply(lan, searchQuery("13", "2"))
 
@@ -67,8 +67,52 @@ func TestMaster_NewRoomQueryWithAGameServer_CreatesTheRoomOnTheGameServer(t *tes
 	}
 }
 
+// fakeHosts hands out its servers in order and hosts the ones not in stopped.
+type fakeHosts struct {
+	free    []netip.AddrPort
+	stopped map[netip.AddrPort]bool
+}
+
+func (h *fakeHosts) Host() (netip.AddrPort, bool) {
+	if len(h.free) == 0 {
+		return netip.AddrPort{}, false
+	}
+	server := h.free[0]
+	h.free = h.free[1:]
+	return server, true
+}
+
+func (h *fakeHosts) Hosting(address netip.AddrPort) bool { return !h.stopped[address] }
+
+func TestMaster_NewRoomQueryWithNoServerAvailable_AnswersNoServer(t *testing.T) {
+	master := matching.NewMaster(&fakeHosts{})
+
+	got := master.Reply(lan, searchQuery("13", "2"))
+
+	want := []byte{0, 0, 0, 13, 0x7a}
+	if !slices.Equal(got, want) {
+		t.Fatalf("Reply() = %v, want %v", got, want)
+	}
+}
+
+func TestMaster_JoinSearch_SkipsRoomsWhoseServerStopped(t *testing.T) {
+	first, second := netip.MustParseAddrPort("127.0.0.2:27020"), netip.MustParseAddrPort("127.0.0.2:27021")
+	hosts := &fakeHosts{free: []netip.AddrPort{first, second}, stopped: map[netip.AddrPort]bool{}}
+	master := matching.NewMaster(hosts)
+	master.Reply(lan, searchQuery("1", "2"))
+	master.Reply(lan, searchQuery("2", "2"))
+	hosts.stopped[second] = true
+
+	got := master.Reply(lan, searchQuery("3", "5"))
+
+	want := []byte{0, 0, 0, 3, 1, 1, 0, 127, 0, 0, 2, 0x6d, 0x74, 0, 0, 0, 1, 1, 1, 2}
+	if !slices.Equal(got, want) {
+		t.Fatalf("Reply() = %v, want %v", got, want)
+	}
+}
+
 func TestMaster_JoinSearchAfterCreation_FindsTheNewestMatchingRoom(t *testing.T) {
-	master := matching.NewMaster(netip.AddrPort{})
+	master := matching.NewMaster(nil)
 	master.Reply(lan, searchQuery("1", "2"))
 	master.Reply(lan, searchQuery("2", "2"))
 
@@ -81,7 +125,7 @@ func TestMaster_JoinSearchAfterCreation_FindsTheNewestMatchingRoom(t *testing.T)
 }
 
 func TestMaster_JoinSearchWithADifferentDifficulty_FindsNothing(t *testing.T) {
-	master := matching.NewMaster(netip.AddrPort{})
+	master := matching.NewMaster(nil)
 	master.Reply(lan, searchQuery("1", "2"))
 	other := searchQuery("2", "5")
 	other.Fields["difficulty"] = "3"
@@ -94,7 +138,7 @@ func TestMaster_JoinSearchWithADifferentDifficulty_FindsNothing(t *testing.T) {
 }
 
 func TestMaster_OtherQueries_NeedNoAnswer(t *testing.T) {
-	got := matching.NewMaster(netip.AddrPort{}).Reply(netip.AddrFrom4([4]byte{127, 0, 0, 1}), matching.Query{Type: '0', Fields: map[string]string{}})
+	got := matching.NewMaster(nil).Reply(netip.AddrFrom4([4]byte{127, 0, 0, 1}), matching.Query{Type: '0', Fields: map[string]string{}})
 
 	if got != nil {
 		t.Fatalf("Reply() = %v, want nil", got)

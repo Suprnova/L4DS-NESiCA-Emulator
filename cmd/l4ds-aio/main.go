@@ -6,7 +6,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -16,6 +18,7 @@ import (
 	"os/signal"
 	"path/filepath"
 
+	"l4ds-nesica-emulator/internal/dedicated"
 	"l4ds-nesica-emulator/internal/game"
 	"l4ds-nesica-emulator/internal/matching"
 	"l4ds-nesica-emulator/internal/nesys"
@@ -33,16 +36,18 @@ func main() {
 	gameDir := flag.String("game-dir", "", "game install folder; its level table sets player levels (all players are level 1 without it)")
 	masterAddr := flag.String("master", ":27010", "UDP address of the matching master")
 	gameServerAddr := flag.String("game-server", "", "UDP address to log game server queries on, such as :27015; it blocks the game's own listen server there")
-	roomServer := flag.String("room-server", "", "IPv4 address and port of the dedicated server that hosts new rooms, such as 127.0.0.1:27020 (default: the creating machine's listen server on port 27015)")
+	roomServer := flag.String("room-server", "", "IPv4 address and port of a dedicated server, started by hand, that hosts every new room, such as 127.0.0.2:27020")
+	dsDir := flag.String("ds-dir", "", "dedicated server folder built by maketree.ps1; l4ds-aio then runs a dedicated server for each new room (without it or -room-server, rooms are on the creating machine's port 27015)")
+	dsIP := flag.String("ds-ip", "127.0.0.2", "IPv4 address the dedicated servers bind to and rooms are advertised at; not 127.0.0.1, which the game never sends to over the network")
+	dsPort := flag.Uint("ds-port", 27020, "game port of the first dedicated server; the others use the ports after it")
+	dsMax := flag.Int("ds-max", 4, "most dedicated servers running at once")
+	dsSpares := flag.Int("ds-spares", 1, "dedicated servers kept ready for new rooms")
 	flag.Parse()
 
-	var roomServerAddr netip.AddrPort
-	if *roomServer != "" {
-		var err error
-		if roomServerAddr, err = netip.ParseAddrPort(*roomServer); err != nil || !roomServerAddr.Addr().Is4() {
-			slog.Error("room-server must be an IPv4 address and port", "room-server", *roomServer)
-			os.Exit(1)
-		}
+	hosts, pool, err := roomHosts(*roomServer, *dsDir, *dsIP, *dsPort, *dsMax, *dsSpares)
+	if err != nil {
+		slog.Error("room servers", "error", err)
+		os.Exit(1)
 	}
 
 	var levels *game.LevelTable
@@ -91,7 +96,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer master.Close()
-	go matching.NewMaster(roomServerAddr).Serve(master)
+	go matching.NewMaster(hosts).Serve(master)
 
 	if *gameServerAddr != "" {
 		gameServer, err := net.ListenPacket("udp", *gameServerAddr)
@@ -101,6 +106,18 @@ func main() {
 		}
 		defer gameServer.Close()
 		go matching.ServeGameServer(gameServer)
+	}
+
+	if pool != nil {
+		poolDone := make(chan struct{})
+		go func() {
+			pool.Run(ctx)
+			close(poolDone)
+		}()
+		defer func() {
+			stop()
+			<-poolDone
+		}()
 	}
 
 	slog.Info("serving", "pipe", *path, "server-key", *serverKey)
@@ -114,6 +131,39 @@ func main() {
 		}
 		go serve(conn, config)
 	}
+}
+
+// roomHosts returns the servers that host new rooms: a pool of dedicated servers run from dir, a
+// server started by hand at roomServer, or nil for the creating machine's own listen server.
+func roomHosts(roomServer, dir, ip string, firstPort uint, maxServers, spares int) (matching.Hosts, *dedicated.Pool, error) {
+	switch {
+	case roomServer != "" && dir != "":
+		return nil, nil, errors.New("-room-server and -ds-dir cannot be combined")
+	case roomServer != "":
+		address, err := netip.ParseAddrPort(roomServer)
+		if err != nil || !address.Addr().Is4() {
+			return nil, nil, fmt.Errorf("-room-server %q is not an IPv4 address and port", roomServer)
+		}
+		return matching.FixedHost(address), nil, nil
+	case dir != "":
+		address, err := netip.ParseAddr(ip)
+		if err != nil || !address.Is4() {
+			return nil, nil, fmt.Errorf("-ds-ip %q is not an IPv4 address", ip)
+		}
+		if firstPort == 0 || firstPort+uint(maxServers) > 65535 {
+			return nil, nil, fmt.Errorf("-ds-port %d leaves no room for %d servers", firstPort, maxServers)
+		}
+		dir, err = filepath.Abs(dir)
+		if err != nil {
+			return nil, nil, err
+		}
+		pool, err := dedicated.NewPool(dedicated.Config{Dir: dir, IP: address, FirstPort: uint16(firstPort), Max: maxServers, Spares: spares})
+		if err != nil {
+			return nil, nil, err
+		}
+		return pool, pool, nil
+	}
+	return nil, nil, nil
 }
 
 func serve(conn net.Conn, config nesys.Config) {
