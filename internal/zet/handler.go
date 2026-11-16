@@ -21,7 +21,8 @@ func reply(body string) http.HandlerFunc {
 	}
 }
 
-// svp answers with a success header followed by the player id the game sent.
+// svp answers with a success header followed by the player id the game sent, which the game
+// uses as its player id from then on.
 func svp(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("1\n1\n" + r.PostFormValue("player_id") + "\n"))
+	w.Write([]byte("1\n1\n0\n" + r.PostFormValue("player_id") + "\n"))
 }

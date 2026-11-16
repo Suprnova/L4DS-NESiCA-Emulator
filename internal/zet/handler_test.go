@@ -35,7 +35,7 @@ func TestHandler_Version_RepliesWithHeaderOnly(t *testing.T) {
 func TestHandler_Svp_ReturnsThePlayerId(t *testing.T) {
 	got := post("/svp", "credit=1&player_id=42")
 
-	if got != "1\n1\n42\n" {
+	if got != "1\n1\n0\n42\n" {
 		t.Fatalf("body = %q", got)
 	}
 }
