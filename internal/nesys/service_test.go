@@ -141,7 +141,9 @@ func TestServe_ClientEnd_RepliesAndStops(t *testing.T) {
 
 type fakeCards struct{}
 
-func (fakeCards) Select(cardID string) string { return "1\n1\n" + cardID + "\n0\n" }
+func (fakeCards) Select(cardID string) (string, error) {
+	return "1\n1\n" + cardID + "\n0\n", nil
+}
 
 func TestServe_CardSelect_RepliesWithTheCardsBody(t *testing.T) {
 	config := testConfig

@@ -33,9 +33,8 @@ type Config struct {
 
 // Cards answers the game's card commands.
 type Cards interface {
-	// Select returns the reply body for the player registered to a card, or one for an
-	// unregistered card.
-	Select(cardID string) string
+	// Select returns the reply body describing the player registered to a card.
+	Select(cardID string) (string, error)
 }
 
 // Serve answers the game's commands on conn until the game ends the session or the
@@ -135,6 +134,12 @@ func selectCard(cards Cards, payload []byte) []wire.Frame {
 	}
 
 	slog.Info("card select", "card", request.CardID, "kind", request.Kind, "data", request.Data)
-	reply := wire.CardReply{Status: 1, Body: cards.Select(request.CardID)}
+	body, err := cards.Select(request.CardID)
+	if err != nil {
+		slog.Error("card select", "card", request.CardID, "error", err)
+		return nil
+	}
+
+	reply := wire.CardReply{Status: 1, Body: body}
 	return []wire.Frame{{Command: wire.CardSelectReply, Payload: reply.Encode()}}
 }

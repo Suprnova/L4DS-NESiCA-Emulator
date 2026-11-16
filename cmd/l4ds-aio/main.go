@@ -16,6 +16,7 @@ import (
 
 	"l4ds-nesica-emulator/internal/nesys"
 	"l4ds-nesica-emulator/internal/pipe"
+	"l4ds-nesica-emulator/internal/store"
 	"l4ds-nesica-emulator/internal/wire"
 	"l4ds-nesica-emulator/internal/zet"
 )
@@ -24,7 +25,16 @@ func main() {
 	path := flag.String("pipe", pipe.DefaultPath, "named pipe the game connects to")
 	serverKey := flag.String("server-key", "dev.game.zet.square-enix.co.jp", "master and lobby host string sent to the game")
 	prefecture := flag.String("prefecture", "Tokyo", "prefecture reported for the store; must not be empty")
+	dbPath := flag.String("db", "l4ds.db", "SQLite database holding the players")
 	flag.Parse()
+
+	players, err := store.Open(*dbPath)
+	if err != nil {
+		slog.Error("open database", "path", *dbPath, "error", err)
+		os.Exit(1)
+	}
+	defer players.Close()
+	server := zet.NewServer(players)
 
 	config := nesys.Config{
 		Store:          wire.StoreInfo{ID: 1, Name: "L4DS Emulator", Prefecture: *prefecture},
@@ -32,8 +42,8 @@ func main() {
 		Adapter:        wire.AdapterDetails{IP: "127.0.0.1", MAC: "020000000001"},
 		Public:         wire.PublicAddress{IP: "127.0.0.1"},
 		ServiceVersion: "2.79 2014/07/08",
-		HTTP:           logRequests(zet.Handler()),
-		Cards:          zet.Cards{},
+		HTTP:           logRequests(server.Handler()),
+		Cards:          server,
 	}
 
 	listener, err := pipe.Listen(*path)

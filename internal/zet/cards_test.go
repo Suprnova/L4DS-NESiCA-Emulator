@@ -4,13 +4,29 @@ import (
 	"strings"
 	"testing"
 
+	"l4ds-nesica-emulator/internal/store"
 	"l4ds-nesica-emulator/internal/zet"
 )
 
-func TestCards_Select_ReturnsARegisteredPlayer(t *testing.T) {
-	got := strings.Split(zet.Cards{}.Select("7020392000000001"), "\n")
+func newServer(t *testing.T) (*zet.Server, *store.Store) {
+	t.Helper()
+	s, err := store.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	return zet.NewServer(s), s
+}
 
-	if got[0] != "1" || got[2] != "7020392000000001" || got[3] != "1" || got[4] != "Survivor" {
-		t.Fatalf("Select() lines = %q", got)
+func TestServer_Select_ReturnsTheStoredPlayer(t *testing.T) {
+	server, s := newServer(t)
+	player, _ := s.PlayerByCard("7020392000000001")
+	s.RecordResult(player.ID, store.Result{Zet: 568, Score: 195})
+
+	body, err := server.Select("7020392000000001")
+
+	lines := strings.Split(body, "\n")
+	if err != nil || lines[0] != "1" || lines[2] != "7020392000000001" || lines[3] != "1" || lines[4] != "Survivor" || lines[5] != "568" || lines[7] != "195" {
+		t.Fatalf("Select() = %q, %v", body, err)
 	}
 }

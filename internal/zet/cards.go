@@ -5,20 +5,18 @@ import (
 	"strings"
 )
 
-// Cards is the card registry. It currently registers every card to the same player.
-type Cards struct{}
+// Select answers a card lookup with the profile of the player registered to the card,
+// registering a new player for an unknown card. Lines after the character id (avatar,
+// equipment and history) are left out, which the game reads as empty.
+func (s *Server) Select(cardID string) (string, error) {
+	player, err := s.store.PlayerByCard(cardID)
+	if err != nil {
+		return "", err
+	}
 
-const (
-	playerID   = 1
-	playerName = "Survivor"
-)
-
-// Select answers a card lookup with the profile of the registered player. Lines after the
-// character id (avatar, equipment and history) are left out, which the game reads as empty.
-func (Cards) Select(cardID string) string {
 	lines := []any{
-		1, 1, cardID, playerID, playerName,
-		0, 1, 0, "", "", 0, 0, 0, 0,
+		1, 1, cardID, player.ID, player.Name,
+		player.Zet, 1, player.Score, "", "", 0, 0, 0, 0,
 		0, "", 1, "", 0,
 	}
 
@@ -26,5 +24,5 @@ func (Cards) Select(cardID string) string {
 	for _, line := range lines {
 		fmt.Fprintf(&body, "%v\n", line)
 	}
-	return body.String()
+	return body.String(), nil
 }
