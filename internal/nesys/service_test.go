@@ -189,3 +189,14 @@ func TestServe_Shopping_RepliesWithShoppingReply(t *testing.T) {
 		t.Fatalf("reply = %+v", reply)
 	}
 }
+
+func TestServe_CardUpdate_RepliesWithSuccess(t *testing.T) {
+	game := startGame(t)
+
+	reply := exchange(t, game, wire.CardUpdate, make([]byte, 126))
+
+	want := wire.CardReply{Status: 1, Body: "1\n1\n"}.Encode()
+	if reply.Command != wire.CardUpdateReply || string(reply.Payload) != string(want) {
+		t.Fatalf("reply = %+v", reply)
+	}
+}

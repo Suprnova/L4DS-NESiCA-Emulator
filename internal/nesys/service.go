@@ -91,6 +91,10 @@ func respond(config Config, request wire.Frame) []wire.Frame {
 		return []wire.Frame{{Command: wire.IncomeStatusReply, Payload: []byte{1, 0, 0, 0, 1, 0, 0, 0}}}
 	case wire.Shopping:
 		return []wire.Frame{{Command: wire.ShoppingReply, Payload: []byte{1, 0, 0, 0}}}
+	case wire.CardUpdate:
+		slog.Info("card update", "payload", fmt.Sprintf("%q", request.Payload[min(len(request.Payload), 16):]))
+		reply := wire.CardReply{Status: 1, Body: "1\n1\n"}
+		return []wire.Frame{{Command: wire.CardUpdateReply, Payload: reply.Encode()}}
 	case wire.CardSelect:
 		return selectCard(config.Cards, request.Payload)
 	case wire.ClientEnd:
