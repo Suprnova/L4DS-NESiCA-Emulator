@@ -84,7 +84,7 @@ func respond(config Config, request wire.Frame) []wire.Frame {
 		return []wire.Frame{{Command: wire.RowEventDataReply, Payload: wire.EmptyEventList()}}
 	case wire.HTTPPost:
 		return tunnel(config.HTTP, request.Payload)
-	case wire.GameStart:
+	case wire.GameStart, wire.GameEnd, wire.GameContinue:
 		return []wire.Frame{{Command: wire.GameStatusReply, Payload: []byte{1, 0, 0, 0}}}
 	case wire.IncomeStart, wire.IncomeEnd:
 		return []wire.Frame{{Command: wire.IncomeStatusReply, Payload: []byte{1, 0, 0, 0, 1, 0, 0, 0}}}

@@ -162,13 +162,15 @@ func TestServe_CardSelect_RepliesWithTheCardsBody(t *testing.T) {
 	}
 }
 
-func TestServe_GameStart_RepliesWithGameStatus(t *testing.T) {
-	game := startGame(t)
+func TestServe_GameLifecycle_RepliesWithGameStatus(t *testing.T) {
+	for _, command := range []wire.Command{wire.GameStart, wire.GameEnd, wire.GameContinue} {
+		game := startGame(t)
 
-	reply := exchange(t, game, wire.GameStart, make([]byte, 7))
+		reply := exchange(t, game, command, make([]byte, 7))
 
-	if reply.Command != wire.GameStatusReply || binary.LittleEndian.Uint32(reply.Payload) != 1 {
-		t.Fatalf("reply = %+v", reply)
+		if reply.Command != wire.GameStatusReply || binary.LittleEndian.Uint32(reply.Payload) != 1 {
+			t.Fatalf("%#x reply = %+v", uint32(command), reply)
+		}
 	}
 }
 
