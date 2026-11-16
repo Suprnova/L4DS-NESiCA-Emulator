@@ -179,3 +179,13 @@ func TestServe_IncomeStart_RepliesWithPlayerAndStatus(t *testing.T) {
 		t.Fatalf("reply = %+v", reply)
 	}
 }
+
+func TestServe_Shopping_RepliesWithShoppingReply(t *testing.T) {
+	game := startGame(t)
+
+	reply := exchange(t, game, wire.Shopping, make([]byte, 27))
+
+	if reply.Command != wire.ShoppingReply {
+		t.Fatalf("reply = %+v", reply)
+	}
+}

@@ -89,6 +89,8 @@ func respond(config Config, request wire.Frame) []wire.Frame {
 		return []wire.Frame{{Command: wire.GameStatusReply, Payload: []byte{1, 0, 0, 0}}}
 	case wire.IncomeStart:
 		return []wire.Frame{{Command: wire.IncomeStatusReply, Payload: []byte{1, 0, 0, 0, 1, 0, 0, 0}}}
+	case wire.Shopping:
+		return []wire.Frame{{Command: wire.ShoppingReply, Payload: []byte{1, 0, 0, 0}}}
 	case wire.CardSelect:
 		return selectCard(config.Cards, request.Payload)
 	case wire.ClientEnd:
