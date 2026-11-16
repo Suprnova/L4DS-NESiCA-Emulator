@@ -30,3 +30,17 @@ func TestServer_Select_ReturnsTheStoredPlayer(t *testing.T) {
 		t.Fatalf("Select() = %q, %v", body, err)
 	}
 }
+
+func TestServer_Select_ReportsExperienceAndLoginsAfterTheEmptyBlocks(t *testing.T) {
+	server, s := newServer(t)
+	player, _ := s.PlayerByCard("7020392000000001")
+	s.RecordResult(player.ID, store.Result{Exp: 222})
+	s.RecordLogin(player.ID)
+
+	body, _ := server.Select("7020392000000001")
+
+	lines := strings.Split(body, "\n")
+	if lines[53] != "222" || lines[87] != "1" {
+		t.Fatalf("experience line = %q, login_num line = %q", lines[53], lines[87])
+	}
+}

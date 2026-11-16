@@ -1,6 +1,7 @@
 package zet
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -20,8 +21,14 @@ var defaultConfig = []int{
 	0, 0, 0, 0, 0, 0, 0, 0, 0,
 }
 
-// login answers with a success header, no bonuses and the default player settings.
-func login(w http.ResponseWriter, _ *http.Request) {
+// login counts the login and answers with a success header, no bonuses and the default
+// player settings.
+func (s *Server) login(w http.ResponseWriter, r *http.Request) {
+	playerID := formInt(r, "player_id")
+	if err := s.store.RecordLogin(playerID); err != nil {
+		slog.Error("record login", "player", playerID, "error", err)
+	}
+
 	lines := []string{"1", "1", "0"}
 	for range emptyGroups {
 		lines = append(lines, "0")

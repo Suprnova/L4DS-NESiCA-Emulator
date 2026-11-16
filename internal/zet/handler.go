@@ -23,7 +23,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /sendversion", reply("1\n1\n0\n"))
 	mux.HandleFunc("POST /version", reply("1\n1\n0\n"))
-	mux.HandleFunc("POST /login", login)
+	mux.HandleFunc("POST /login", s.login)
 	mux.HandleFunc("POST /loading_start", reply("1\n1\n0\n"))
 	mux.HandleFunc("POST /chapter_start", reply("1\n1\n0\n"))
 	mux.HandleFunc("POST /result", s.result)

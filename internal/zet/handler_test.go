@@ -76,3 +76,15 @@ func TestHandler_Result_AddsTheChapterToThePlayersTotals(t *testing.T) {
 		t.Fatalf("body = %q, player = %+v", got, updated)
 	}
 }
+
+func TestHandler_Login_CountsTheLogin(t *testing.T) {
+	server, s := newServer(t)
+	player, _ := s.PlayerByCard("7020392000000001")
+
+	postTo(server, "/login", fmt.Sprintf("player_id=%d", player.ID))
+
+	updated, _ := s.Player(player.ID)
+	if updated.Logins != 1 {
+		t.Fatalf("logins = %d", updated.Logins)
+	}
+}
