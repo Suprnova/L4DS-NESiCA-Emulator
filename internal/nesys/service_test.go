@@ -138,3 +138,24 @@ func TestServe_ClientEnd_RepliesAndStops(t *testing.T) {
 		t.Fatalf("reply = %+v", reply)
 	}
 }
+
+type fakeCards struct{}
+
+func (fakeCards) Select(cardID string) string { return "1\n1\n" + cardID + "\n0\n" }
+
+func TestServe_CardSelect_RepliesWithTheCardsBody(t *testing.T) {
+	config := testConfig
+	config.Cards = fakeCards{}
+	game, service := net.Pipe()
+	t.Cleanup(func() { game.Close() })
+	go nesys.Serve(service, config)
+	payload := make([]byte, 24)
+	copy(payload, "7020392000000001")
+
+	reply := exchange(t, game, wire.CardSelect, payload)
+
+	want := wire.CardReply{Status: 1, Body: "1\n1\n7020392000000001\n0\n"}.Encode()
+	if reply.Command != wire.CardSelectReply || string(reply.Payload) != string(want) {
+		t.Fatalf("reply = %+v", reply)
+	}
+}

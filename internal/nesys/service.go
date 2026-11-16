@@ -26,6 +26,16 @@ type Config struct {
 	// HTTP answers the requests the game tunnels through the service. A nil handler makes
 	// every tunnelled request fail with an error code.
 	HTTP http.Handler
+
+	// Cards answers the card commands. A nil value leaves them unanswered.
+	Cards Cards
+}
+
+// Cards answers the game's card commands.
+type Cards interface {
+	// Select returns the reply body for the player registered to a card, or one for an
+	// unregistered card.
+	Select(cardID string) string
 }
 
 // Serve answers the game's commands on conn until the game ends the session or the
@@ -75,6 +85,8 @@ func respond(config Config, request wire.Frame) []wire.Frame {
 		return []wire.Frame{{Command: wire.RowEventDataReply, Payload: wire.EmptyEventList()}}
 	case wire.HTTPPost:
 		return tunnel(config.HTTP, request.Payload)
+	case wire.CardSelect:
+		return selectCard(config.Cards, request.Payload)
 	case wire.ClientEnd:
 		return []wire.Frame{{Command: wire.ClientEndReply}}
 	default:
@@ -104,4 +116,15 @@ func tunnel(handler http.Handler, payload []byte) []wire.Frame {
 		{Command: wire.HTTPStart, Payload: wire.HTTPStartPayload()},
 		{Command: wire.HTTPReply, Payload: response.Encode()},
 	}
+}
+
+func selectCard(cards Cards, payload []byte) []wire.Frame {
+	request, err := wire.ParseCardSelectRequest(payload)
+	if err != nil || cards == nil {
+		return nil
+	}
+
+	slog.Info("card select", "card", request.CardID, "kind", request.Kind, "data", request.Data)
+	reply := wire.CardReply{Status: 1, Body: cards.Select(request.CardID)}
+	return []wire.Frame{{Command: wire.CardSelectReply, Payload: reply.Encode()}}
 }
