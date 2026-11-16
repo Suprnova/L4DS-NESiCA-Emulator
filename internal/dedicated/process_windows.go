@@ -55,14 +55,12 @@ func killOnCloseJob() (windows.Handle, error) {
 }
 
 // startServer runs a server on port in job, in a console window of its own. It loads
-// c1m1_hotel; a room's reservation changes the map. Its console log goes to
-// left4dead2\logs\server-<port>.log in the tree.
+// c1m1_hotel; a room's reservation changes the map.
 func startServer(config Config, job windows.Handle, port uint16, password string) (process, error) {
 	cmd := exec.Command(filepath.Join(config.Dir, "srcds.exe"),
 		"-console", "-game", "left4dead2", "-basedir", config.Dir, "-insecure",
 		"+ip", config.IP.String(), "-port", strconv.Itoa(int(port)),
 		"+sv_lan", "1", "+sv_allow_lobby_connect_only", "0",
-		"+con_logfile", fmt.Sprintf("logs/server-%d.log", port),
 		"+rcon_password", password, "+map", "c1m1_hotel")
 	cmd.Dir = config.Dir
 	cmd.Env = append(os.Environ(), "L4DS_DIR="+config.Dir)
