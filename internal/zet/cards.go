@@ -31,7 +31,7 @@ func (s *Server) Select(cardID string) (wire.CardReply, error) {
 
 	lines := []any{
 		1, 1, cardID, player.ID, player.Name,
-		player.Zet, 1, player.Score, "", "", 0, 0, 0, 0,
+		player.Zet, s.levels.Level(player.Exp), player.Score, "", "", 0, 0, 0, 0,
 		0, "", 1, "", player.CharaID,
 	}
 	lines = append(lines, slices.Repeat([]any{""}, avatarLines)...)

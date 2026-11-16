@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"l4ds-nesica-emulator/internal/game"
 	"l4ds-nesica-emulator/internal/store"
 	"l4ds-nesica-emulator/internal/wire"
 	"l4ds-nesica-emulator/internal/zet"
@@ -19,7 +20,7 @@ func newServer(t *testing.T) (*zet.Server, *store.Store) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	return zet.NewServer(s), s
+	return zet.NewServer(s, nil), s
 }
 
 func TestServer_Select_ReturnsTheStoredPlayer(t *testing.T) {
@@ -90,5 +91,20 @@ func TestServer_Insert_RegisteredCard_ReturnsAnError(t *testing.T) {
 
 	if err == nil {
 		t.Fatal("Insert() error = nil")
+	}
+}
+
+func TestServer_Select_ReportsTheLevelFromExperience(t *testing.T) {
+	levels, _ := game.ParseLevelTable(strings.NewReader(`"LevelTable" { "Lv1" { "BaseExp" "0" } "Lv2" { "BaseExp" "150" } }`))
+	s, _ := store.Open(":memory:")
+	t.Cleanup(func() { s.Close() })
+	server := zet.NewServer(s, levels)
+	player, _ := s.Register("7020392000000001", "Survivor", 0)
+	s.RecordResult(player.ID, store.Result{Exp: 150})
+
+	reply, _ := server.Select("7020392000000001")
+
+	if level := strings.Split(reply.Body, "\n")[6]; level != "2" {
+		t.Fatalf("level line = %q, want 2", level)
 	}
 }

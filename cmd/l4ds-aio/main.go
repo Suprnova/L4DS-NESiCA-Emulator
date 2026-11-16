@@ -13,7 +13,9 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 
+	"l4ds-nesica-emulator/internal/game"
 	"l4ds-nesica-emulator/internal/nesys"
 	"l4ds-nesica-emulator/internal/pipe"
 	"l4ds-nesica-emulator/internal/store"
@@ -26,7 +28,17 @@ func main() {
 	serverKey := flag.String("server-key", "dev.game.zet.square-enix.co.jp", "master and lobby host string sent to the game")
 	prefecture := flag.String("prefecture", "Tokyo", "prefecture reported for the store; must not be empty")
 	dbPath := flag.String("db", "l4ds.db", "SQLite database holding the players")
+	gameDir := flag.String("game-dir", "", "game install folder; its level table sets player levels (all players are level 1 without it)")
 	flag.Parse()
+
+	var levels *game.LevelTable
+	if *gameDir != "" {
+		var err error
+		if levels, err = loadLevels(*gameDir); err != nil {
+			slog.Error("load level table", "game-dir", *gameDir, "error", err)
+			os.Exit(1)
+		}
+	}
 
 	players, err := store.Open(*dbPath)
 	if err != nil {
@@ -34,7 +46,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer players.Close()
-	server := zet.NewServer(players)
+	server := zet.NewServer(players, levels)
 
 	config := nesys.Config{
 		Store:          wire.StoreInfo{ID: 1, Name: "L4DS Emulator", Prefecture: *prefecture},
@@ -89,4 +101,13 @@ func logRequests(next http.Handler) http.Handler {
 		slog.Info("http", "path", r.URL.Path, "body", string(body))
 		next.ServeHTTP(w, r)
 	})
+}
+
+func loadLevels(gameDir string) (*game.LevelTable, error) {
+	file, err := os.Open(filepath.Join(gameDir, "left4dead2", "resource", "LevelTable.txt"))
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	return game.ParseLevelTable(file)
 }

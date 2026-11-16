@@ -7,16 +7,21 @@ import (
 	"net/http"
 	"strconv"
 
+	"l4ds-nesica-emulator/internal/game"
 	"l4ds-nesica-emulator/internal/store"
 )
 
 // Server is the ZET game server.
 type Server struct {
-	store *store.Store
+	store  *store.Store
+	levels *game.LevelTable
 }
 
-// NewServer returns a server that keeps its players in s.
-func NewServer(s *store.Store) *Server { return &Server{store: s} }
+// NewServer returns a server that keeps its players in s and derives their levels from levels.
+// A nil table makes every player level 1.
+func NewServer(s *store.Store, levels *game.LevelTable) *Server {
+	return &Server{store: s, levels: levels}
+}
 
 // Handler returns the server's HTTP handler.
 func (s *Server) Handler() http.Handler {
