@@ -3,7 +3,7 @@ package wire
 import "encoding/binary"
 
 const (
-	httpRequestHeaderSize = 0xC59
+	httpRequestHeaderSize = 0xC5B
 	httpReplyHeaderSize   = 0x414
 	httpURLSize           = 0x401
 )

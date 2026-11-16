@@ -86,11 +86,11 @@ func TestServe_QueryCommands_ReplyWithMatchingCommandAndSize(t *testing.T) {
 }
 
 func httpPostPayload(url, body string) []byte {
-	payload := make([]byte, 0xC59+len(body))
+	payload := make([]byte, 0xC5B+len(body))
 	copy(payload, url)
 	binary.LittleEndian.PutUint32(payload[0x848:], 5)
 	binary.LittleEndian.PutUint32(payload[0x854:], uint32(len(body)))
-	copy(payload[0xC59:], body)
+	copy(payload[0xC5B:], body)
 	return payload
 }
 
