@@ -15,9 +15,11 @@ import (
 const (
 	listQuery = '2'
 
-	// errOK and errEmptyList are the reply error codes for a list with entries and an empty list.
-	errOK        = 1
-	errEmptyList = 0x7e
+	// Reply error codes. The window that sent a query acts on them: errEmptyList offers to
+	// create a room, and errRoomCreated enters the state that recruits members for the room in
+	// the reply.
+	errRoomCreated = 0x7c
+	errEmptyList   = 0x7e
 
 	// joinInProgress is the value of the room field in a search for a game already started.
 	joinInProgress = "5"
@@ -83,7 +85,7 @@ func (m *Master) Reply(from net.IP, query Query) []byte {
 		return append(reply, errEmptyList)
 	}
 
-	reply = append(reply, errOK, 1, 0)
+	reply = append(reply, errRoomCreated, 1, 0)
 	reply = append(reply, host...)
 	reply = binary.BigEndian.AppendUint16(reply, advertisedPort)
 	reply = binary.BigEndian.AppendUint32(reply, m.newRoomID())
