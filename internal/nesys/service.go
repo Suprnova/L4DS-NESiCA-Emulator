@@ -35,6 +35,10 @@ type Config struct {
 type Cards interface {
 	// Select returns the reply body describing the player registered to a card.
 	Select(cardID string) (string, error)
+
+	// Insert registers a player to a card from the game's comma-separated key=value text and
+	// returns the reply body.
+	Insert(cardID, data string) (string, error)
 }
 
 // Serve answers the game's commands on conn until the game ends the session or the
@@ -94,6 +98,8 @@ func respond(config Config, request wire.Frame) []wire.Frame {
 		slog.Info("card update", "payload", fmt.Sprintf("%q", request.Payload[min(len(request.Payload), 16):]))
 		reply := wire.CardReply{Status: 1, Body: "1\n1\n"}
 		return []wire.Frame{{Command: wire.CardUpdateReply, Payload: reply.Encode()}}
+	case wire.CardInsert:
+		return insertCard(config.Cards, request.Payload)
 	case wire.CardSelect:
 		return selectCard(config.Cards, request.Payload)
 	case wire.ClientEnd:
@@ -142,4 +148,21 @@ func selectCard(cards Cards, payload []byte) []wire.Frame {
 
 	reply := wire.CardReply{Status: 1, Body: body}
 	return []wire.Frame{{Command: wire.CardSelectReply, Payload: reply.Encode()}}
+}
+
+func insertCard(cards Cards, payload []byte) []wire.Frame {
+	request, err := wire.ParseCardWriteRequest(payload)
+	if err != nil || cards == nil {
+		return nil
+	}
+
+	slog.Info("card insert", "card", request.CardID, "data", string(request.Data))
+	body, err := cards.Insert(request.CardID, string(request.Data))
+	if err != nil {
+		slog.Error("card insert", "card", request.CardID, "error", err)
+		return nil
+	}
+
+	reply := wire.CardReply{Status: 1, Body: body}
+	return []wire.Frame{{Command: wire.CardInsertReply, Payload: reply.Encode()}}
 }

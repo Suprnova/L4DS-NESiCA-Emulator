@@ -1,6 +1,9 @@
 package zet_test
 
 import (
+	"encoding/base64"
+	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -52,5 +55,28 @@ func TestServer_Select_UnregisteredCard_ReportsPlayerIdZero(t *testing.T) {
 
 	if err != nil || body != "1\n1\n7020392000000009\n0\n" {
 		t.Fatalf("Select() = %q, %v", body, err)
+	}
+}
+
+func TestServer_Insert_RegistersTheDecodedPlayer(t *testing.T) {
+	server, s := newServer(t)
+	name := url.QueryEscape(base64.StdEncoding.EncodeToString([]byte("Nova ノヴァ")))
+
+	body, err := server.Insert("7020392000000002", "tenpo_id=1,player_name="+name+",chara_id=3")
+
+	player, _ := s.PlayerByCard("7020392000000002")
+	if err != nil || body != "1\n1\n"+strconv.FormatInt(player.ID, 10)+"\n" || player.Name != "Nova ノヴァ" || player.CharaID != 3 {
+		t.Fatalf("Insert() = %q, %v; player %+v", body, err, player)
+	}
+}
+
+func TestServer_Insert_RegisteredCard_ReturnsAnError(t *testing.T) {
+	server, s := newServer(t)
+	s.Register("7020392000000002", "Nova", 0)
+
+	_, err := server.Insert("7020392000000002", "tenpo_id=1,player_name=,chara_id=1")
+
+	if err == nil {
+		t.Fatal("Insert() error = nil")
 	}
 }

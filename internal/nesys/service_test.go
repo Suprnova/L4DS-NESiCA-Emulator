@@ -145,6 +145,10 @@ func (fakeCards) Select(cardID string) (string, error) {
 	return "1\n1\n" + cardID + "\n0\n", nil
 }
 
+func (fakeCards) Insert(cardID, data string) (string, error) {
+	return "1\n1\n7\n", nil
+}
+
 func TestServe_CardSelect_RepliesWithTheCardsBody(t *testing.T) {
 	config := testConfig
 	config.Cards = fakeCards{}
@@ -211,6 +215,25 @@ func TestServe_IncomeEnd_RepliesWithPlayerAndStatus(t *testing.T) {
 	reply := exchange(t, game, wire.IncomeEnd, make([]byte, 27))
 
 	if reply.Command != wire.IncomeStatusReply || len(reply.Payload) != 8 {
+		t.Fatalf("reply = %+v", reply)
+	}
+}
+
+func TestServe_CardInsert_RepliesWithTheCardsBody(t *testing.T) {
+	config := testConfig
+	config.Cards = fakeCards{}
+	game, service := net.Pipe()
+	t.Cleanup(func() { game.Close() })
+	go nesys.Serve(service, config)
+	payload := make([]byte, 32)
+	copy(payload, "7020392000000001")
+	binary.LittleEndian.PutUint32(payload[28:], 5)
+	payload = append(payload, "a=1,b"...)
+
+	reply := exchange(t, game, wire.CardInsert, payload)
+
+	want := wire.CardReply{Status: 1, Body: "1\n1\n7\n"}.Encode()
+	if reply.Command != wire.CardInsertReply || string(reply.Payload) != string(want) {
 		t.Fatalf("reply = %+v", reply)
 	}
 }
