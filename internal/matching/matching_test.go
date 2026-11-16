@@ -44,7 +44,7 @@ func TestMaster_NewRoomQuery_CreatesARoomOnTheAskingMachine(t *testing.T) {
 	first := master.Reply(net.IPv4(192, 168, 1, 20), query)
 	second := master.Reply(net.IPv4(192, 168, 1, 20), query)
 
-	want := []byte{0, 0, 0, 13, 0x7c, 1, 0, 192, 168, 1, 20, 0x6d, 0x6f, 0, 0, 0, 1, 0, 0, 0}
+	want := []byte{0, 0, 0, 13, 1, 1, 0, 192, 168, 1, 20, 0x6d, 0x6f, 0, 0, 0, 1, 0, 0, 0}
 	if !slices.Equal(first, want) {
 		t.Fatalf("Reply() = %v, want %v", first, want)
 	}
