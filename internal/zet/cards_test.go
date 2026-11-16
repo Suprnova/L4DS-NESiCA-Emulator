@@ -48,12 +48,12 @@ func TestServer_Select_ReportsExperienceAndLoginsAfterTheEmptyBlocks(t *testing.
 	}
 }
 
-func TestServer_Select_UnregisteredCard_ReportsPlayerIdZero(t *testing.T) {
+func TestServer_Select_UnregisteredCard_ReportsTheUnregisteredResult(t *testing.T) {
 	server, _ := newServer(t)
 
 	body, err := server.Select("7020392000000009")
 
-	if err != nil || body != "1\n1\n7020392000000009\n0\n" {
+	if err != nil || body != "23\n1\n7020392000000009\n" {
 		t.Fatalf("Select() = %q, %v", body, err)
 	}
 }

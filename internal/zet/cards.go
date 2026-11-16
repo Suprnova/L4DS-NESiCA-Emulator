@@ -16,13 +16,16 @@ import (
 // color index.
 const avatarLines = 30
 
+// unregisteredCard is the card server result code for a card with no player.
+const unregisteredCard = 23
+
 // Select answers a card lookup with the profile of the player registered to the card. An
-// unregistered card gets only the header and a player id of 0. The avatar, title and equipment
-// blocks are empty, so the game uses its defaults.
+// unregistered card gets the unregisteredCard result and no profile. The avatar, title and
+// equipment blocks are empty, so the game uses its defaults.
 func (s *Server) Select(cardID string) (string, error) {
 	player, err := s.store.PlayerByCard(cardID)
 	if errors.Is(err, store.ErrNotRegistered) {
-		return fmt.Sprintf("1\n1\n%s\n0\n", cardID), nil
+		return fmt.Sprintf("%d\n1\n%s\n", unregisteredCard, cardID), nil
 	}
 	if err != nil {
 		return "", err
