@@ -3,6 +3,7 @@ package store_test
 import (
 	"database/sql"
 	"errors"
+	"slices"
 	"testing"
 
 	_ "modernc.org/sqlite"
@@ -113,4 +114,20 @@ func TestOpen_DatabaseFromAnEarlierSchema_IsMigrated(t *testing.T) {
 		t.Fatalf("player = %+v, err = %v", player, err)
 	}
 	s.Close()
+}
+
+func TestRecordResult_ClearedChapter_IsListedOnce(t *testing.T) {
+	s := openStore(t)
+	player := register(t, s)
+	s.RecordResult(player.ID, store.Result{StageID: 1, ChapterID: 2, Cleared: true})
+	s.RecordResult(player.ID, store.Result{StageID: 1, ChapterID: 1, Cleared: true})
+	s.RecordResult(player.ID, store.Result{StageID: 1, ChapterID: 2, Cleared: true})
+	s.RecordResult(player.ID, store.Result{StageID: 2, ChapterID: 1, Cleared: false})
+
+	clears, err := s.Clears(player.ID)
+
+	want := []store.Clear{{StageID: 1, ChapterID: 1}, {StageID: 1, ChapterID: 2}}
+	if err != nil || !slices.Equal(clears, want) {
+		t.Fatalf("Clears() = %v, %v; want %v", clears, err, want)
+	}
 }

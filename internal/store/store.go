@@ -22,6 +22,12 @@ var migrations = []string{
 	)`,
 	`ALTER TABLE players ADD COLUMN logins INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE players ADD COLUMN chara_id INTEGER NOT NULL DEFAULT 0`,
+	`CREATE TABLE chapter_clears (
+		player_id  INTEGER NOT NULL REFERENCES players (id),
+		stage_id   INTEGER NOT NULL,
+		chapter_id INTEGER NOT NULL,
+		PRIMARY KEY (player_id, stage_id, chapter_id)
+	)`,
 }
 
 // ErrNotRegistered reports that no player is registered to a card.
@@ -44,9 +50,18 @@ type Player struct {
 
 // Result is what a finished chapter adds to a player's totals.
 type Result struct {
-	Zet   int64
-	Exp   int64
-	Score int64
+	Zet       int64
+	Exp       int64
+	Score     int64
+	StageID   int64
+	ChapterID int64
+	Cleared   bool
+}
+
+// Clear is a chapter a player has cleared.
+type Clear struct {
+	StageID   int64
+	ChapterID int64
 }
 
 // Store is a SQLite database of players.
@@ -114,10 +129,50 @@ func (s *Store) Register(cardID, name string, charaID int64) (Player, error) {
 // Player returns the player with the given id, or sql.ErrNoRows when there is none.
 func (s *Store) Player(id int64) (Player, error) { return s.player(`id = ?`, id) }
 
-// RecordResult adds a finished chapter to a player's totals.
+// RecordResult adds a finished chapter to a player's totals, and to their cleared chapters
+// when the chapter was cleared.
 func (s *Store) RecordResult(playerID int64, result Result) error {
-	return s.updatePlayer(`UPDATE players SET zet = zet + ?, exp = exp + ?, score = score + ? WHERE id = ?`,
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	outcome, err := tx.Exec(`UPDATE players SET zet = zet + ?, exp = exp + ?, score = score + ? WHERE id = ?`,
 		result.Zet, result.Exp, result.Score, playerID)
+	if err != nil {
+		return err
+	}
+	if rows, _ := outcome.RowsAffected(); rows == 0 {
+		return errors.New("store: no such player")
+	}
+
+	if result.Cleared {
+		if _, err := tx.Exec(`INSERT OR IGNORE INTO chapter_clears (player_id, stage_id, chapter_id) VALUES (?, ?, ?)`,
+			playerID, result.StageID, result.ChapterID); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// Clears returns the chapters a player has cleared, ordered by stage and chapter.
+func (s *Store) Clears(playerID int64) ([]Clear, error) {
+	rows, err := s.db.Query(`SELECT stage_id, chapter_id FROM chapter_clears WHERE player_id = ? ORDER BY stage_id, chapter_id`, playerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var clears []Clear
+	for rows.Next() {
+		var clear Clear
+		if err := rows.Scan(&clear.StageID, &clear.ChapterID); err != nil {
+			return nil, err
+		}
+		clears = append(clears, clear)
+	}
+	return clears, rows.Err()
 }
 
 // RecordLogin counts one more login for a player.
