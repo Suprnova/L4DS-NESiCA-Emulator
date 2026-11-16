@@ -57,7 +57,7 @@ func TestHandler_Login_ReturnsTheDefaultSettingsAfterTheEmptyGroups(t *testing.T
 }
 
 func TestHandler_ChapterLifecycle_AcceptsEachStage(t *testing.T) {
-	for _, path := range []string{"/loading_start", "/chapter_start", "/chapter_end", "/close"} {
+	for _, path := range []string{"/loading_start", "/prestage", "/chapter_start", "/chapter_end", "/close"} {
 		got := post(t, path, "player_id=1")
 
 		if got != "1\n1\n0\n" {
