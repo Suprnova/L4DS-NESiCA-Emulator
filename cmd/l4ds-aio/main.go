@@ -33,6 +33,7 @@ func main() {
 		Public:         wire.PublicAddress{IP: "127.0.0.1"},
 		ServiceVersion: "2.79 2014/07/08",
 		HTTP:           logRequests(zet.Handler()),
+		Cards:          zet.Cards{},
 	}
 
 	listener, err := pipe.Listen(*path)
