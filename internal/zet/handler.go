@@ -9,6 +9,7 @@ func Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /sendversion", reply("1\n1\n0\n"))
 	mux.HandleFunc("POST /version", reply("1\n1\n0\n"))
+	mux.HandleFunc("POST /login", reply("1\n1\n0\n"))
 	mux.HandleFunc("POST /svp", svp)
 	return mux
 }

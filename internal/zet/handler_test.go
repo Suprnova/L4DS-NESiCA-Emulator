@@ -39,3 +39,11 @@ func TestHandler_Svp_ReturnsThePlayerId(t *testing.T) {
 		t.Fatalf("body = %q", got)
 	}
 }
+
+func TestHandler_Login_SucceedsWithNoBonuses(t *testing.T) {
+	got := post("/login", "mac_addr=020000000001&player_id=1&chara_id=3&svp=0&rev_customize=0")
+
+	if got != "1\n1\n0\n" {
+		t.Fatalf("body = %q", got)
+	}
+}
