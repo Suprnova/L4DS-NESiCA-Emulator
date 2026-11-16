@@ -1,0 +1,18 @@
+# Build output
+/bin/
+*.exe
+*.test
+*.out
+
+# Local data
+*.db
+*.db-journal
+
+# Editors
+.vs/
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+Desktop.ini
