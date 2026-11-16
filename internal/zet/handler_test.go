@@ -47,3 +47,13 @@ func TestHandler_Login_SucceedsWithNoBonuses(t *testing.T) {
 		t.Fatalf("body = %q", got)
 	}
 }
+
+func TestHandler_ChapterLifecycle_AcceptsStart(t *testing.T) {
+	for _, path := range []string{"/loading_start", "/chapter_start"} {
+		got := post(path, "player_id=1")
+
+		if got != "1\n1\n0\n" {
+			t.Fatalf("%s body = %q", path, got)
+		}
+	}
+}
