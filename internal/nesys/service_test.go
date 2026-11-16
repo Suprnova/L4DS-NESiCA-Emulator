@@ -159,3 +159,13 @@ func TestServe_CardSelect_RepliesWithTheCardsBody(t *testing.T) {
 		t.Fatalf("reply = %+v", reply)
 	}
 }
+
+func TestServe_GameStart_RepliesWithGameStatus(t *testing.T) {
+	game := startGame(t)
+
+	reply := exchange(t, game, wire.GameStart, make([]byte, 7))
+
+	if reply.Command != wire.GameStatusReply || binary.LittleEndian.Uint32(reply.Payload) != 1 {
+		t.Fatalf("reply = %+v", reply)
+	}
+}
