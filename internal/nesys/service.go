@@ -5,7 +5,9 @@ package nesys
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 
@@ -37,6 +39,8 @@ func Serve(conn io.ReadWriter, config Config) error {
 		if err != nil {
 			return err
 		}
+
+		slog.Info("command", "id", fmt.Sprintf("%#x", uint32(request.Command)), "payload", len(request.Payload))
 
 		for _, reply := range respond(config, request) {
 			if _, err := conn.Write(reply.Encode()); err != nil {
