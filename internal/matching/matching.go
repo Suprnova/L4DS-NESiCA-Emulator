@@ -85,6 +85,10 @@ func (q Query) player() int64 {
 	return id
 }
 
+// difficulty is the query's difficulty as a room entry carries it: 1 is easy, 2 normal. It is
+// at least 1, because the game drops a room with difficulty 0.
+func (q Query) difficulty() byte { return byte(max(q.number("difficulty"), 1)) }
+
 // lobby reports whether rooms for the query's mode and rule are picked from a lobby's room list,
 // as store and clan rooms are. The game then expects the long room entry; the test mirrors the
 // engine's (0x102115a0).
@@ -309,7 +313,7 @@ func (m *Master) playLobbyRoom(host netip.Addr, query Query) (*room, byte) {
 	if stage := query.number("stage"); stage > 0 {
 		target.campaign = byte(stage)
 		target.chapter = byte(max(query.number("chapter"), 1))
-		target.difficulty = byte(query.number("difficulty") + 1)
+		target.difficulty = query.difficulty()
 	}
 	return target, 0
 }
@@ -340,7 +344,7 @@ func (m *Master) newRoom(server netip.AddrPort, query Query) *room {
 	if !query.lobby() {
 		created.campaign = byte(max(query.number("stage"), 1))
 		created.chapter = byte(max(query.number("chapter"), 1))
-		created.difficulty = byte(query.number("difficulty") + 1)
+		created.difficulty = query.difficulty()
 	}
 	m.nextRoomID++
 	return created
@@ -373,7 +377,7 @@ func (m *Master) search(query Query) []*room {
 			continue
 		}
 		if !query.lobby() {
-			if r.difficulty == byte(query.number("difficulty")+1) {
+			if r.difficulty == query.difficulty() {
 				return []*room{r}
 			}
 			continue

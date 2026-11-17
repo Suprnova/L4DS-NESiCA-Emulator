@@ -88,7 +88,7 @@ func TestMaster_NewRoomQuery_CreatesARoomOnTheAskingMachine(t *testing.T) {
 	first := single(t, master.Reply(lan, searchQuery("13", "2")))
 	second := single(t, master.Reply(lan, searchQuery("14", "2")))
 
-	want := []byte{0, 0, 0, 13, 1, 1, 0, 192, 168, 1, 20, 0x6d, 0x6f, 0, 0, 0, 1, 1, 1, 2}
+	want := []byte{0, 0, 0, 13, 1, 1, 0, 192, 168, 1, 20, 0x6d, 0x6f, 0, 0, 0, 1, 1, 1, 1}
 	if !slices.Equal(first, want) {
 		t.Fatalf("Reply() = %v, want %v", first, want)
 	}
@@ -102,7 +102,7 @@ func TestMaster_NewRoomQueryWithAGameServer_CreatesTheRoomOnTheGameServer(t *tes
 
 	got := single(t, master.Reply(lan, searchQuery("13", "2")))
 
-	want := []byte{0, 0, 0, 13, 1, 1, 0, 10, 0, 0, 5, 0x6d, 0x74, 0, 0, 0, 1, 1, 1, 2}
+	want := []byte{0, 0, 0, 13, 1, 1, 0, 10, 0, 0, 5, 0x6d, 0x74, 0, 0, 0, 1, 1, 1, 1}
 	if !slices.Equal(got, want) {
 		t.Fatalf("Reply() = %v, want %v", got, want)
 	}
@@ -142,7 +142,7 @@ func TestMaster_JoinSearch_SkipsRoomsWhoseServerStopped(t *testing.T) {
 
 	got := single(t, master.Reply(lan, searchQuery("3", "5")))
 
-	want := []byte{0, 0, 0, 3, 1, 1, 0, 127, 0, 0, 2, 0x6d, 0x74, 0, 0, 0, 1, 1, 1, 2}
+	want := []byte{0, 0, 0, 3, 1, 1, 0, 127, 0, 0, 2, 0x6d, 0x74, 0, 0, 0, 1, 1, 1, 1}
 	if !slices.Equal(got, want) {
 		t.Fatalf("Reply() = %v, want %v", got, want)
 	}
@@ -156,7 +156,7 @@ func TestMaster_EnterRoomAfterASearch_ReturnsTheFoundRoomWithoutCreatingOne(t *t
 
 	got := single(t, master.Reply(lan, searchQuery("3", "3")))
 
-	want := []byte{0, 0, 0, 3, 1, 1, 0, 127, 0, 0, 2, 0x6d, 0x74, 0, 0, 0, 1, 1, 1, 2}
+	want := []byte{0, 0, 0, 3, 1, 1, 0, 127, 0, 0, 2, 0x6d, 0x74, 0, 0, 0, 1, 1, 1, 1}
 	if !slices.Equal(got, want) || len(hosts.free) != 1 {
 		t.Fatalf("Reply() = %v, want %v; servers left = %d, want 1", got, want, len(hosts.free))
 	}
@@ -186,7 +186,7 @@ func TestMaster_JoinSearchAfterCreation_FindsTheNewestMatchingRoom(t *testing.T)
 
 	got := single(t, master.Reply(netip.AddrFrom4([4]byte{192, 168, 1, 21}), searchQuery("3", "5")))
 
-	want := []byte{0, 0, 0, 3, 1, 1, 0, 192, 168, 1, 20, 0x6d, 0x6f, 0, 0, 0, 2, 1, 1, 2}
+	want := []byte{0, 0, 0, 3, 1, 1, 0, 192, 168, 1, 20, 0x6d, 0x6f, 0, 0, 0, 2, 1, 1, 1}
 	if !slices.Equal(got, want) {
 		t.Fatalf("Reply() = %v, want %v", got, want)
 	}
@@ -273,7 +273,7 @@ func TestMaster_OwnerSendsTheChosenStage_SetsTheRoomsStage(t *testing.T) {
 
 	got := single(t, master.Reply(lan, chosen))
 
-	if !slices.Equal(got[7:13], []byte{127, 0, 0, 2, 0x6d, 0x74}) || !slices.Equal(got[17:20], []byte{2, 3, 2}) {
+	if !slices.Equal(got[7:13], []byte{127, 0, 0, 2, 0x6d, 0x74}) || !slices.Equal(got[17:20], []byte{2, 3, 1}) {
 		t.Fatalf("address %v, campaign, chapter and difficulty %v", got[7:13], got[17:20])
 	}
 }
@@ -343,7 +343,7 @@ func TestMaster_MemberWaitingInARoom_GetsItsServerAndStageOnceTheOwnerPicksOne(t
 
 	got := single(t, master.Reply(lan, storeRoom("16", "3", "1")))
 
-	if !slices.Equal(got[7:13], []byte{127, 0, 0, 2, 0x6d, 0x74}) || !slices.Equal(got[17:20], []byte{1, 1, 2}) || field(got, playersAt) != "Boba,Ellis" {
+	if !slices.Equal(got[7:13], []byte{127, 0, 0, 2, 0x6d, 0x74}) || !slices.Equal(got[17:20], []byte{1, 1, 1}) || field(got, playersAt) != "Boba,Ellis" {
 		t.Fatalf("address %v, campaign, chapter and difficulty %v, players %q", got[7:13], got[17:20], field(got, playersAt))
 	}
 }
