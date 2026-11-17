@@ -1,53 +1,85 @@
 # L4DS NESiCA Emulator
 
-A server for the online services of the defunct arcade game *Left 4 Dead Survivors* (Taito/Neilo, 2014).
+A server for the online services of the defunct arcade game *Left 4 Dead: Survivors* (*LEFT 4 DEAD -生存者たち-*, also known as L4DAC; Taito/Neilo, 2014), build 1.26. The unmodified game connects to it as it once connected to Taito's NESiCA network and Square Enix's game servers: cards register and log in, progress is saved, and cabinets find each other for co-op, versus, and events.
 
 > **Do not expose this to the open internet.** The game runs a very old, vulnerable build of Source, and the protocols it speaks are unauthenticated and unencrypted. Supported use is closed networks or very small groups of trusted people, for example over a virtual LAN.
 
-## Components
-
-- `l4ds-server`: HTTP game-server backend, UDP lobby and database.
-- `l4ds-shim`: stand-in for Taito's `NesysService.exe` on each player's PC; forwards to a server.
-- `l4ds-aio`: server and shim in one process, for local development.
-- `l4ds-tree`: builds patched private copies of the game ("trees"): a server tree that `l4ds-aio` runs as dedicated servers, and client trees that run the game with cards inserted from the console. The installed game is never written to.
-- `srcds-stub`: the `srcds.exe` of a server tree; `l4ds-tree` builds it.
-
 ## Status
 
-In development. `l4ds-aio` runs on Windows next to the game. With it, the unmodified game reaches its online mode: card registration and login, single-player chapters with saved progress and settings, and national and store co-op, whose rooms are hosted by dedicated servers that `l4ds-aio` runs from a server tree. Versus and events are not working yet.
+In development. Everything runs on one Windows PC today, through `l4ds-aio`:
 
-## Running
+- card registration, login, saved progress, classes, and settings;
+- single play, national co-op, store co-op, Versus Survival, and events, with up to two copies of the game on the same PC;
+- rankings from the saved players on the attract screen.
 
-All commands run from the repository on Windows, with Go on the `PATH`.
+Playing across several PCs needs a separate server and a small service on each player's PC; both are planned, and so are prebuilt releases. Until the first release, you build from source.
 
-Build the trees once (the folders must not exist yet):
+## What you need
 
-```
-go run ./cmd/l4ds-tree build -game-dir <game folder> -out <server tree>
-go run ./cmd/l4ds-tree build -game-dir <game folder> -out <client tree> -client
-```
+- Windows.
+- Your own copy of *Left 4 Dead: Survivors* 1.26 (version `1.2604`). The tools never write to it.
+- [Go](https://go.dev/dl/), on the `PATH`, to build from source.
 
-Run the server:
+## Setting up one PC
 
-```
-go run ./cmd/l4ds-aio -game-dir <game folder> -ds-dir <server tree> [-config <file>]
-```
+Run these from the repository.
 
-The configuration file sets the store's name and prefecture, the server key, and the versus schedule and events; `l4ds.example.yaml` describes every setting and schedules a versus unit and two sample events. Without one, nothing is scheduled and versus and the event modes stay unavailable.
+1. **Build the trees.** A tree is a private copy of the game: copies of the files the tools patch or the game writes, and junctions to the game's other folders, so it takes little space. The server tree runs the game as the dedicated servers that host rooms; a client tree runs the game with cards inserted from its console. Each folder must not exist yet, and the server tree's path must not contain spaces.
 
-Run the game from the client tree with the usual arcade command line, and put a card on the reader from the game's console:
+   ```
+   go run ./cmd/l4ds-tree build -game-dir <game folder> -out <server tree>
+   go run ./cmd/l4ds-tree build -game-dir <game folder> -out <client tree> -client
+   ```
 
-```
-<client tree>\left4dead2.exe -console -arcadeIO_InitializeSkip -game left4dead2 -language japanese -windowed
-change_debug_dummyCardID <16-digit card number>
-```
+   For a second copy of the game on the same PC, build a second client tree.
 
-The console command puts that card on the reader for one scan: a successful read takes it off again. To scan with a key, bind it once in the console; the game saves the bind in the tree's `left4dead2\cfg\config.cfg`, so each client tree keeps its own card:
+2. **Point the game at the server.** The game finds its matching server by a host name, so that name must resolve to the PC running the server. Add this line to `C:\Windows\System32\drivers\etc\hosts` (an administrator must edit it):
 
-```
-bind ENTER "change_debug_dummyCardID <16-digit card number>"
-```
+   ```
+   127.0.0.1 dev.game.zet.square-enix.co.jp
+   ```
 
-The installed game also works, with `-simulateNESICA <card>` in place of the console commands, but then the card stays on the reader for the whole run and the startup and attract movies never play.
+   The name is the `server_key` in the configuration file; if you change one, change the other. A DNS server on your network that resolves the name works too, in place of the hosts file.
 
-`go run ./cmd/l4ds-tree revert <tree>` restores a tree's original bytes, and `apply` patches it again. Never delete a tree with a recursive delete that follows junctions, such as Windows PowerShell 5.1's `Remove-Item -Recurse`: most of a tree is junctions to the game's folders, and their contents would go too.
+3. **Configure the server.** Copy `l4ds.example.yaml` and adjust it: the store's name and prefecture, the versus schedule, and the events. Every setting is described in the file. Without a configuration file nothing is scheduled, and versus and the event modes stay unavailable.
+
+4. **Start the server** and wait for `dedicated server ready` before creating a room:
+
+   ```
+   go run ./cmd/l4ds-aio -game-dir <game folder> -ds-dir <server tree> -config <configuration file>
+   ```
+
+   Players are saved in `l4ds.db` in the current folder (`-db` changes it). `go run ./cmd/l4ds-aio -help` lists every option.
+
+5. **Start the game** from the client tree:
+
+   ```
+   <client tree>\left4dead2.exe -console -arcadeIO_InitializeSkip -game left4dead2 -language japanese -windowed
+   ```
+
+6. **Scan a card.** Open the console and put a card on the reader. Any 16-digit number is a card; a new one starts registration. The card is read once, then taken off the reader again:
+
+   ```
+   change_debug_dummyCardID <16-digit card number>
+   ```
+
+   To make that shorter, give your cards aliases in the client tree's `left4dead2\cfg\autoexec.cfg`, which the game runs at startup, and type the alias instead:
+
+   ```
+   alias card1 "change_debug_dummyCardID <16-digit card number>"
+   alias card2 "change_debug_dummyCardID <another card number>"
+   ```
+
+   Keys bound to these commands do not work on the title and mode select screens, where the card is read, so type them in the console.
+
+## Trees
+
+`go run ./cmd/l4ds-tree revert <tree>` restores a tree's original bytes, and `apply` patches it again. Most of a tree is junctions to the game's folders, so delete a tree with `cmd /c rmdir /s /q <tree>`, which removes junctions without following them into the game.
+
+## License
+
+The L4DS NESiCA Emulator is licensed under the [GNU Affero General Public License v3.0 or later](LICENSE). Running it unmodified asks nothing of you. If you modify it and players use your modified version, through cabinets or over a network, you must offer them its source.
+
+## Contributing
+
+Contributions are welcome under the terms of the [AI contributions policy](AI_POLICY.md).
