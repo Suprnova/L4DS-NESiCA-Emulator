@@ -14,7 +14,7 @@ A server for the online services of the defunct arcade game *Left 4 Dead Survivo
 
 ## Status
 
-In development. `l4ds-aio` runs on Windows next to the game. With it, the unmodified game reaches its online mode: card registration and login, single-player chapters with saved progress and settings, and national co-op, whose rooms are hosted by dedicated servers that `l4ds-aio` runs from a server tree. Store co-op, versus and events are not working yet.
+In development. `l4ds-aio` runs on Windows next to the game. With it, the unmodified game reaches its online mode: card registration and login, single-player chapters with saved progress and settings, and national and store co-op, whose rooms are hosted by dedicated servers that `l4ds-aio` runs from a server tree. Versus and events are not working yet.
 
 ## Running
 
