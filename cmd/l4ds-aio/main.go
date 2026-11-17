@@ -80,6 +80,13 @@ func main() {
 		os.Exit(1)
 	}
 	defer players.Close()
+	rooms := matching.NewMaster(matching.Config{
+		Hosts:       hosts,
+		PlayerName:  playerName(players),
+		StoreName:   storeName,
+		VersusClass: versusClass(players),
+	})
+	catalog.Leave = rooms.Leave
 	server := zet.NewServer(players, catalog)
 
 	config := nesys.Config{
@@ -112,12 +119,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer master.Close()
-	go matching.NewMaster(matching.Config{
-		Hosts:       hosts,
-		PlayerName:  playerName(players),
-		StoreName:   config.Store.Name,
-		VersusClass: versusClass(players),
-	}).Serve(master)
+	go rooms.Serve(master)
 
 	if *gameServerAddr != "" {
 		gameServer, err := net.ListenPacket("udp", *gameServerAddr)
