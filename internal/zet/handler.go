@@ -49,12 +49,14 @@ var stageKinds = []int{1, 2, 3, 4}
 
 // stageList answers the stage list the game fetches at startup: each stage in every kind, with
 // its id, kind, "new" flag, name and chapters (id and name). The stage select offers these
-// stages, opening each chapter once the one before it is cleared.
+// stages, opening each chapter once the one before it is cleared. Every stage is flagged new:
+// the game marks an uncleared chapter of a new stage "NEW", and a stage "NEW" while none of its
+// chapters is cleared, "CLEAR" once all are, and nothing in between.
 func (s *Server) stageList(w http.ResponseWriter, _ *http.Request) {
 	lines := []string{"1", "1", "0", strconv.Itoa(len(s.stages) * len(stageKinds))}
 	for _, kind := range stageKinds {
 		for _, stage := range s.stages {
-			lines = append(lines, strconv.Itoa(stage.ID), strconv.Itoa(kind), "0", stage.Name, strconv.Itoa(len(stage.Chapters)))
+			lines = append(lines, strconv.Itoa(stage.ID), strconv.Itoa(kind), "1", stage.Name, strconv.Itoa(len(stage.Chapters)))
 			for _, chapter := range stage.Chapters {
 				lines = append(lines, strconv.Itoa(chapter.ID), chapter.Name)
 			}

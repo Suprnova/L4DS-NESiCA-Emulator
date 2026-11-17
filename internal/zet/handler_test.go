@@ -102,7 +102,7 @@ func TestHandler_Stages_ListsEveryStageInEachKind(t *testing.T) {
 	got := strings.Split(postTo(server, "/stages", ""), "\n")
 
 	stage := func(kind string) []string {
-		return []string{"9", kind, "0", "Crash Course", "2", "1", "1: Alleys", "2", "2: Truck Depot"}
+		return []string{"9", kind, "1", "Crash Course", "2", "1", "1: Alleys", "2", "2: Truck Depot"}
 	}
 	want := slices.Concat([]string{"1", "1", "0", "4"}, stage("1"), stage("2"), stage("3"), stage("4"), []string{""})
 	if !slices.Equal(got, want) {
