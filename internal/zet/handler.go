@@ -14,10 +14,11 @@ import (
 
 // Server is the ZET game server.
 type Server struct {
-	store    *store.Store
-	levels   *game.LevelTable
-	stages   []game.Stage
-	schedule Schedule
+	store     *store.Store
+	levels    *game.LevelTable
+	stages    []game.Stage
+	schedule  Schedule
+	storeName string
 }
 
 // Catalog is what the server offers players besides their own data.
@@ -29,11 +30,13 @@ type Catalog struct {
 	// Schedule holds the versus schedule and the events; without them versus and the event
 	// modes stay unavailable.
 	Schedule Schedule
+	// StoreName is the store every player's ranking entry shows.
+	StoreName string
 }
 
 // NewServer returns a server that keeps its players in s and offers catalog.
 func NewServer(s *store.Store, catalog Catalog) *Server {
-	return &Server{store: s, levels: catalog.Levels, stages: catalog.Stages, schedule: catalog.Schedule}
+	return &Server{store: s, levels: catalog.Levels, stages: catalog.Stages, schedule: catalog.Schedule, storeName: catalog.StoreName}
 }
 
 // Handler returns the server's HTTP handler.

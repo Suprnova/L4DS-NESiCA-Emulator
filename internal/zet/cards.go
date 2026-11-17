@@ -41,12 +41,16 @@ func (s *Server) Select(cardID string) (wire.CardReply, error) {
 	lines = append(lines, slices.Repeat([]any{0}, emptyAvatarLines)...)
 	lines = append(lines, 0, "", "", 0, player.Exp, 0)
 	lines = append(lines, player.Logins, player.VSPlays, player.VSWins)
+	return wire.CardReply{Status: 1, Body: lineBody(lines)}, nil
+}
 
+// lineBody returns lines as a reply body, one value per line.
+func lineBody(lines []any) string {
 	var body strings.Builder
 	for _, line := range lines {
 		fmt.Fprintf(&body, "%v\n", line)
 	}
-	return wire.CardReply{Status: 1, Body: body.String()}, nil
+	return body.String()
 }
 
 // ReissueTest answers that no reissue is reserved for the card.
