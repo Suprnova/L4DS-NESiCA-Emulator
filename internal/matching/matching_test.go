@@ -606,3 +606,28 @@ func TestMaster_DecidedVersusRoom_ShowsEachMembersVersusClass(t *testing.T) {
 		t.Fatalf("classes %v", got[classesAt:numbersAt])
 	}
 }
+
+func TestMaster_PlayerWhoLeavesTheirVersusRoom_IsNoLongerListed(t *testing.T) {
+	master, _ := versusMaster()
+	master.Reply(lan, versusQuery("11", "3", "1"))
+	master.Reply(lan, versusQuery("12", "3", "3"))
+
+	master.Leave(1, 1)
+
+	got := single(t, master.Reply(lan, versusQuery("13", "5", "3")))
+	if field(got, playersAt) != "Ellis" {
+		t.Fatalf("players %q, want Ellis", field(got, playersAt))
+	}
+}
+
+func TestMaster_LastPlayerLeavingARoom_DropsIt(t *testing.T) {
+	master, _ := versusMaster()
+	master.Reply(lan, versusQuery("11", "3", "1"))
+
+	master.Leave(1, 1)
+
+	got := single(t, master.Reply(lan, versusQuery("12", "5", "1")))
+	if got[4] != 0x7d {
+		t.Fatalf("Reply() = %v, want room lost", got)
+	}
+}

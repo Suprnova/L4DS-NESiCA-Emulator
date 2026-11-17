@@ -348,6 +348,20 @@ func (m *Master) Reply(from netip.Addr, query Query) [][]byte {
 	return replies
 }
 
+// Leave takes a player out of a room, as the game reports when the player leaves matching, and
+// drops the room once nobody is left in it.
+func (m *Master) Leave(playerID int64, roomID uint32) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.rooms = slices.DeleteFunc(m.rooms, func(r *room) bool {
+		if r.id != roomID {
+			return false
+		}
+		r.members = slices.DeleteFunc(r.members, func(member int64) bool { return member == playerID })
+		return len(r.members) == 0
+	})
+}
+
 func (m *Master) dropEnded() {
 	now := m.now()
 	m.rooms = slices.DeleteFunc(m.rooms, func(r *room) bool {
