@@ -90,14 +90,18 @@ func (q Query) player() int64 {
 func (q Query) difficulty() byte { return byte(max(q.number("difficulty"), 1)) }
 
 // lobby reports whether rooms for the query's mode and rule are picked from a lobby's room list,
-// as store and clan rooms are. The game then expects the long room entry; the test mirrors the
-// engine's (0x102115a0).
+// as store and clan rooms are.
 func (q Query) lobby() bool {
 	mode, rule := q.number("mode"), q.number("rule")
-	if rule == ruleClan || rule == ruleStore {
-		return mode >= 1 && mode <= 4
-	}
-	return mode == 2 || mode >= 7 && mode <= 10
+	return (rule == ruleClan || rule == ruleStore) && mode >= 1 && mode <= 4
+}
+
+// longEntry reports whether the game expects the long room entry, with members and status, in
+// replies to the query. The test mirrors the engine's (0x102115a0): lobby rooms, national events
+// and versus.
+func (q Query) longEntry() bool {
+	mode := q.number("mode")
+	return q.lobby() || mode == 2 || mode >= 7 && mode <= 10
 }
 
 // Values of a lobby room's permission byte, which the room panel shows as an icon.
@@ -426,7 +430,7 @@ func (m *Master) enter(query Query) *room {
 }
 
 // appendEntry appends r's room entry: the address, port, id, campaign, chapter and difficulty,
-// and for a lobby query the members, their titles, stores and clans, six status bytes (class
+// and when the query expects the long entry the members, their titles, stores and clans, six status bytes (class
 // condition, permission, progress, whether the asking player owns the room, the asking player's
 // member index and the owner's), the password, two eight-byte arrays (class ids and numbers) and
 // an expiry date. Fields with unknown meaning are zero or empty.
@@ -439,7 +443,7 @@ func (m *Master) appendEntry(b []byte, r *room, query Query) []byte {
 	}
 	b = binary.BigEndian.AppendUint32(b, r.id)
 	b = append(b, r.campaign, r.chapter, r.difficulty)
-	if !query.lobby() {
+	if !query.longEntry() {
 		return b
 	}
 

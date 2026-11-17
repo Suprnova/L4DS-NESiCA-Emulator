@@ -336,6 +336,17 @@ func TestMaster_StoreLobby_ListsTheStoresRoomsNewestFirst(t *testing.T) {
 	}
 }
 
+func TestMaster_NationalEventNewRoom_CreatesARoomWithTheLongEntry(t *testing.T) {
+	query := searchQuery("13", "2")
+	query.Fields["mode"] = "2"
+
+	got := single(t, storeMaster().Reply(lan, query))
+
+	if len(got) != entrySize || !slices.Equal(got[7:13], []byte{127, 0, 0, 2, 0x6d, 0x74}) || field(got, playersAt) != "Boba" {
+		t.Fatalf("entry size %d, address %v, players %q", len(got), got[7:13], field(got, playersAt))
+	}
+}
+
 func TestMaster_RefreshingAnEmptyStoreLobby_AnswersAnEmptySuccess(t *testing.T) {
 	got := single(t, storeMaster().Reply(lan, storeQuery("11", "5", "1")))
 
