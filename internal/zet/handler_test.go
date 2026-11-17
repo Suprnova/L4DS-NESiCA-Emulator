@@ -93,6 +93,27 @@ func TestHandler_Result_KeepsTheClassesTheGameReports(t *testing.T) {
 	}
 }
 
+func TestHandler_Leave_TellsWhoLeftWhichRoom(t *testing.T) {
+	s, _ := store.Open(":memory:")
+	t.Cleanup(func() { s.Close() })
+	var left [2]int64
+	server := zet.NewServer(s, zet.Catalog{Leave: func(player int64, room uint32) { left = [2]int64{player, int64(room)} }})
+
+	got := postTo(server, "/leave", "player_id=4&room_id=1")
+
+	if got != "1\n1\n0\n" || left != [2]int64{4, 1} {
+		t.Fatalf("body = %q, left = %v", got, left)
+	}
+}
+
+func TestHandler_Select_IsAcknowledged(t *testing.T) {
+	got := post(t, "/select", "player_id=4&room_id=1")
+
+	if got != "1\n1\n0\n" {
+		t.Fatalf("body = %q", got)
+	}
+}
+
 func TestHandler_VersusResult_AddsToTheVersusClassPoints(t *testing.T) {
 	server, s := newServer(t)
 	player, _ := s.Register("7020392000000001", "Survivor", 0)

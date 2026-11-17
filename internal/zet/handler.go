@@ -19,6 +19,7 @@ type Server struct {
 	stages    []game.Stage
 	schedule  Schedule
 	storeName string
+	leave     func(playerID int64, roomID uint32)
 }
 
 // Catalog is what the server offers players besides their own data.
@@ -32,11 +33,13 @@ type Catalog struct {
 	Schedule Schedule
 	// StoreName is the store every player's ranking entry shows.
 	StoreName string
+	// Leave is told when a player leaves the matching room they were in; it may be nil.
+	Leave func(playerID int64, roomID uint32)
 }
 
 // NewServer returns a server that keeps its players in s and offers catalog.
 func NewServer(s *store.Store, catalog Catalog) *Server {
-	return &Server{store: s, levels: catalog.Levels, stages: catalog.Stages, schedule: catalog.Schedule, storeName: catalog.StoreName}
+	return &Server{store: s, levels: catalog.Levels, stages: catalog.Stages, schedule: catalog.Schedule, storeName: catalog.StoreName, leave: catalog.Leave}
 }
 
 // Handler returns the server's HTTP handler.
@@ -55,6 +58,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /stages", s.stageList)
 	mux.HandleFunc("POST /versus", s.versusList)
 	mux.HandleFunc("POST /event", s.eventList)
+	mux.HandleFunc("POST /select", stub("matching room choice: player_id, room_id"))
+	mux.HandleFunc("POST /leave", s.leaveRoom)
 	mux.HandleFunc("/", unanswered)
 	return mux
 }
@@ -147,6 +152,15 @@ func (s *Server) result(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.RecordResult(playerID, result); err != nil {
 		slog.Error("record result", "player", playerID, "error", err)
 	}
+}
+
+// leaveRoom tells the matching master that a player left a room, and answers with a success
+// header.
+func (s *Server) leaveRoom(w http.ResponseWriter, r *http.Request) {
+	if s.leave != nil {
+		s.leave(formInt(r, "player_id"), uint32(formInt(r, "room_id")))
+	}
+	w.Write([]byte(successHeader))
 }
 
 // guest reports whether a player id is the one the game uses when no card is in use (-1).
