@@ -18,8 +18,8 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
-	"time"
 
+	"l4ds-nesica-emulator/internal/config"
 	"l4ds-nesica-emulator/internal/dedicated"
 	"l4ds-nesica-emulator/internal/game"
 	"l4ds-nesica-emulator/internal/matching"
@@ -30,13 +30,9 @@ import (
 	"l4ds-nesica-emulator/internal/zet"
 )
 
-// storeName is the store the game shows on its network screen, in room lists and in rankings.
-const storeName = "L4DS Emulator"
-
 func main() {
 	path := flag.String("pipe", pipe.DefaultPath, "named pipe the game connects to")
-	serverKey := flag.String("server-key", "dev.game.zet.square-enix.co.jp", "master and lobby host string sent to the game")
-	prefecture := flag.String("prefecture", "Tokyo", "prefecture reported for the store; must not be empty")
+	configPath := flag.String("config", "", "YAML configuration file with the store, the server key and the versus and event schedule (see l4ds.example.yaml); without it the store is \"L4DS Emulator\" in Tokyo and nothing is scheduled")
 	dbPath := flag.String("db", "l4ds.db", "SQLite database holding the players")
 	gameDir := flag.String("game-dir", "", "game install folder; its level table sets player levels (all players are level 1 without it)")
 	masterAddr := flag.String("master", ":27010", "UDP address of the matching master")
@@ -48,8 +44,21 @@ func main() {
 	dsMax := flag.Int("ds-max", 4, "most dedicated servers running at once")
 	dsSpares := flag.Int("ds-spares", 1, "dedicated servers kept ready for new rooms")
 	dsConsole := flag.Bool("ds-console", false, "show each dedicated server's console window")
-	sampleSchedule := flag.Bool("sample-schedule", false, "offer a sample versus unit and national and store events (store event id 1), to try those modes; their results and prizes are not supported yet")
 	flag.Parse()
+
+	settings := config.Default()
+	if *configPath != "" {
+		var err error
+		if settings, err = config.Load(*configPath); err != nil {
+			slog.Error("load configuration", "error", err)
+			os.Exit(1)
+		}
+	}
+	schedule, err := settings.Schedule()
+	if err != nil {
+		slog.Error("load configuration", "error", err)
+		os.Exit(1)
+	}
 
 	dsConfig := dedicated.Config{Dir: *dsDir, Max: *dsMax, Spares: *dsSpares, ShowConsoles: *dsConsole}
 	hosts, pool, err := roomHosts(*roomServer, *dsIP, *dsPort, dsConfig)
@@ -58,7 +67,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	catalog := zet.Catalog{StoreName: storeName}
+	catalog := zet.Catalog{StoreName: settings.Store.Name, Schedule: schedule}
 	if *gameDir != "" {
 		var err error
 		if catalog.Levels, err = loadLevels(*gameDir); err != nil {
@@ -70,9 +79,6 @@ func main() {
 			os.Exit(1)
 		}
 	}
-	if *sampleSchedule {
-		catalog.Schedule = zet.SampleSchedule(time.Now())
-	}
 
 	players, err := store.Open(*dbPath)
 	if err != nil {
@@ -83,15 +89,15 @@ func main() {
 	rooms := matching.NewMaster(matching.Config{
 		Hosts:       hosts,
 		PlayerName:  playerName(players),
-		StoreName:   storeName,
+		StoreName:   settings.Store.Name,
 		VersusClass: versusClass(players),
 	})
 	catalog.Leave = rooms.Leave
 	server := zet.NewServer(players, catalog)
 
-	config := nesys.Config{
-		Store:          wire.StoreInfo{ID: 1, Name: storeName, Prefecture: *prefecture},
-		ServerKey:      *serverKey,
+	service := nesys.Config{
+		Store:          wire.StoreInfo{ID: 1, Name: settings.Store.Name, Prefecture: settings.Store.Prefecture},
+		ServerKey:      settings.ServerKey,
 		Adapter:        wire.AdapterDetails{IP: "127.0.0.1", MAC: "020000000001"},
 		Public:         wire.PublicAddress{IP: "127.0.0.1"},
 		ServiceVersion: "2.79 2014/07/08",
@@ -143,7 +149,7 @@ func main() {
 		}()
 	}
 
-	slog.Info("serving", "pipe", *path, "server-key", *serverKey)
+	slog.Info("serving", "pipe", *path, "server-key", settings.ServerKey, "versus units", len(schedule.Versus), "events", len(schedule.Events))
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -152,7 +158,7 @@ func main() {
 			}
 			return
 		}
-		go serve(conn, config)
+		go serve(conn, service)
 	}
 }
 

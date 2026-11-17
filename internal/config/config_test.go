@@ -137,6 +137,14 @@ func TestSchedule_DailyHours_AreLocalTimesOfDayAfter1970(t *testing.T) {
 	}
 }
 
+func TestLoad_ExampleFile_Loads(t *testing.T) {
+	got, err := config.Load(filepath.Join("..", "..", "l4ds.example.yaml"))
+
+	if err != nil || len(got.Versus) != 1 || len(got.Events) != 2 {
+		t.Fatalf("Load() = %+v, %v", got, err)
+	}
+}
+
 func TestLoad_BadDailyTime_IsAnError(t *testing.T) {
 	_, err := config.Load(writeConfig(t, "events:\n  - id: 2\n    type: national\n    difficulty: normal\n    daily_open: 25h\n"))
 

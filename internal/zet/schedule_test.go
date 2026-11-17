@@ -58,13 +58,3 @@ func TestHandler_Versus_EmptySchedule_ListsNothing(t *testing.T) {
 		t.Fatalf("body = %q", got)
 	}
 }
-
-func TestSampleSchedule_VersusIsOpenNow(t *testing.T) {
-	now := time.Unix(1800000000, 0)
-
-	unit := zet.SampleSchedule(now).Versus[0]
-
-	if !unit.Start.Before(now) || !unit.End.After(now) {
-		t.Fatalf("unit = %+v", unit)
-	}
-}

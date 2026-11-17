@@ -59,30 +59,6 @@ type Event struct {
 	Open, Close, DailyOpen, DailyClose time.Time
 }
 
-// SampleSchedule is a schedule for trying versus and events: one versus unit open from now for a
-// year, one national event and one store event (id 1, so the operator's arcadeStoreEventID must
-// be 1), all on Dead Center's first chapter.
-func SampleSchedule(now time.Time) Schedule {
-	return Schedule{
-		Versus: []VersusUnit{{
-			ID: 1, StageID: 1, ChapterID: 1, Difficulty: 2, GameMode: "versus",
-			Start: now.Add(-time.Hour), End: now.AddDate(1, 0, 0),
-		}},
-		Events: []Event{
-			{
-				ID: 1, Type: EventNational, StageID: 1, ChapterID: 1, Difficulty: 2,
-				TakeWeapon: true, TakeDisposable: true, GameMode: "mutation2",
-				Name: "サンプル全国イベント", Detail: "l4ds-aio の試験用イベントです。|ヘッドショットのみ有効。",
-			},
-			{
-				ID: 1, Type: EventStore, StageID: 1, ChapterID: 1, Difficulty: 2,
-				TakeWeapon: true, TakeDisposable: true, GameMode: "mutation2",
-				Name: "サンプル店内イベント", Detail: "l4ds-aio の試験用イベントです。",
-			},
-		},
-	}
-}
-
 // versusList answers the national versus schedule: the unit count, then nine lines per unit.
 func (s *Server) versusList(w http.ResponseWriter, _ *http.Request) {
 	lines := []string{"1", "1", "0", strconv.Itoa(len(s.schedule.Versus))}
