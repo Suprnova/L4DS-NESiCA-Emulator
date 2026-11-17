@@ -63,16 +63,22 @@ func stageLines(clears []store.Clear) []string {
 }
 
 // login counts the login and answers with a success header, no bonuses, the player's settings
-// and their stage progress. An unknown player gets the default settings.
+// and their stage progress. A guest gets the default settings and no progress.
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	playerID := formInt(r, "player_id")
-	if err := s.store.RecordLogin(playerID); err != nil {
-		slog.Error("record login", "player", playerID, "error", err)
-	}
-
 	settings := store.DefaultSettings
-	if player, err := s.store.Player(playerID); err == nil {
-		settings = player.Settings
+	var clears []store.Clear
+	if !guest(playerID) {
+		if err := s.store.RecordLogin(playerID); err != nil {
+			slog.Error("record login", "player", playerID, "error", err)
+		}
+		if player, err := s.store.Player(playerID); err == nil {
+			settings = player.Settings
+		}
+		var err error
+		if clears, err = s.store.Clears(playerID); err != nil {
+			slog.Error("load clears", "player", playerID, "error", err)
+		}
 	}
 
 	lines := []string{"1", "1", "0"}
@@ -84,10 +90,6 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		lines = append(lines, "0")
 	}
 
-	clears, err := s.store.Clears(playerID)
-	if err != nil {
-		slog.Error("load clears", "player", playerID, "error", err)
-	}
 	lines = append(lines, stageLines(clears)...)
 	w.Write([]byte(strings.Join(lines, "\n") + "\n"))
 }

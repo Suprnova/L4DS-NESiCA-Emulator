@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"slices"
 	"strconv"
@@ -50,6 +51,7 @@ func (s *Server) Select(cardID string) (wire.CardReply, error) {
 
 // ReissueTest answers that no reissue is reserved for the card.
 func (s *Server) ReissueTest(cardID string) (wire.CardReply, error) {
+	slog.Info("stub reply", "command", "CARD_REISSUE_TEST", "ignored", "card reissues: a new card always registers a new player")
 	return wire.CardReply{Status: wire.CardStatusNoReissue, Body: "0\n1\n" + cardID + "\n"}, nil
 }
 
@@ -74,7 +76,7 @@ const (
 )
 
 // Update stores what the game writes to a card: a new player name or the player's settings.
-// Other data types are ignored.
+// Other data types are logged and ignored.
 func (s *Server) Update(cardID string, dataType uint32, data string) error {
 	fields := parseFields(data)
 	switch dataType {
@@ -95,6 +97,7 @@ func (s *Server) Update(cardID string, dataType uint32, data string) error {
 			KeyMap:                 number("key_type"),
 		})
 	default:
+		slog.Warn("unhandled card update", "card", cardID, "type", dataType, "data", data)
 		return nil
 	}
 }

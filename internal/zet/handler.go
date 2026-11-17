@@ -29,18 +29,38 @@ func NewServer(s *store.Store, levels *game.LevelTable, stages []game.Stage) *Se
 // Handler returns the server's HTTP handler.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /sendversion", reply("1\n1\n0\n"))
-	mux.HandleFunc("POST /version", reply("1\n1\n0\n"))
+	mux.HandleFunc("POST /sendversion", reply(successHeader))
+	mux.HandleFunc("POST /version", reply(successHeader))
 	mux.HandleFunc("POST /login", s.login)
-	mux.HandleFunc("POST /loading_start", reply("1\n1\n0\n"))
-	mux.HandleFunc("POST /prestage", reply("1\n1\n0\n"))
-	mux.HandleFunc("POST /chapter_start", reply("1\n1\n0\n"))
-	mux.HandleFunc("POST /chapter_end", reply("1\n1\n0\n"))
+	mux.HandleFunc("POST /loading_start", stub("play log: mode, rule, stage, chapter, difficulty, svp"))
+	mux.HandleFunc("POST /prestage", stub("reply's friend invite rewards"))
+	mux.HandleFunc("POST /chapter_start", stub("play log: mode, rule, stage, chapter, difficulty, svp"))
+	mux.HandleFunc("POST /chapter_end", stub("play log: mode, rule, stage, chapter, difficulty, svp"))
 	mux.HandleFunc("POST /result", s.result)
-	mux.HandleFunc("POST /close", reply("1\n1\n0\n"))
+	mux.HandleFunc("POST /close", stub("ex_svp and zet (leftover SVP converted to ZG), reply's info lines"))
 	mux.HandleFunc("POST /svp", svp)
 	mux.HandleFunc("POST /stages", s.stageList)
+	mux.HandleFunc("/", unanswered)
 	return mux
+}
+
+// successHeader is the reply header for a request that succeeded: flag, result 1 and API_ID.
+const successHeader = "1\n1\n0\n"
+
+// stub answers with a bare success header where the official server did more, and logs what
+// the request carried or the reply lacks, so the gap shows while playing.
+func stub(ignored string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		slog.Info("stub reply", "path", r.URL.Path, "ignored", ignored)
+		w.Write([]byte(successHeader))
+	}
+}
+
+// unanswered logs a request the server has no handler for and answers 404, which the game
+// treats as a failed request.
+func unanswered(w http.ResponseWriter, r *http.Request) {
+	slog.Warn("unanswered request", "path", r.URL.Path)
+	http.NotFound(w, r)
 }
 
 // stageKinds are the stage lists the game keeps, one per way of playing: national co-op, store
@@ -75,14 +95,19 @@ func reply(body string) http.HandlerFunc {
 // svp answers with a success header followed by the player id the game sent, which the game
 // uses as its player id from then on.
 func svp(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("1\n1\n0\n" + r.PostFormValue("player_id") + "\n"))
+	w.Write([]byte(successHeader + r.PostFormValue("player_id") + "\n"))
 }
 
 // result adds the finished chapter to the player's totals and answers with a success header.
 // class_point is the change in the player's class points; the game modes it reports are all
-// co-op, so it goes to the co-op class.
+// co-op, so it goes to the co-op class. A guest's result is not kept.
 func (s *Server) result(w http.ResponseWriter, r *http.Request) {
-	playerID, _ := strconv.ParseInt(r.PostFormValue("player_id"), 10, 64)
+	defer w.Write([]byte(successHeader))
+	playerID := formInt(r, "player_id")
+	if guest(playerID) {
+		return
+	}
+
 	result := store.Result{
 		Zet:            formInt(r, "zet"),
 		Exp:            formInt(r, "exp"),
@@ -99,8 +124,10 @@ func (s *Server) result(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.RecordResult(playerID, result); err != nil {
 		slog.Error("record result", "player", playerID, "error", err)
 	}
-	w.Write([]byte("1\n1\n0\n"))
 }
+
+// guest reports whether a player id is the one the game uses when no card is in use (-1).
+func guest(playerID int64) bool { return playerID < 1 }
 
 func formInt(r *http.Request, key string) int64 {
 	value, _ := strconv.ParseInt(r.PostFormValue(key), 10, 64)

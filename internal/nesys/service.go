@@ -97,16 +97,20 @@ func respond(config Config, request wire.Frame) []wire.Frame {
 	case wire.HTTPPost:
 		return tunnel(config.HTTP, request.Payload)
 	case wire.GameStart, wire.GameEnd, wire.GameContinue:
+		slog.Info("stub reply", "command", fmt.Sprintf("%#x", uint32(request.Command)), "ignored", "game status bookkeeping; reply layout guessed")
 		return []wire.Frame{{Command: wire.GameStatusReply, Payload: []byte{1, 0, 0, 0}}}
 	case wire.IncomeStart, wire.IncomeEnd:
+		slog.Info("stub reply", "command", fmt.Sprintf("%#x", uint32(request.Command)), "ignored", "income bookkeeping; reply layout guessed")
 		return []wire.Frame{{Command: wire.IncomeStatusReply, Payload: []byte{1, 0, 0, 0, 1, 0, 0, 0}}}
 	case wire.Shopping:
+		slog.Info("stub reply", "command", "SHOPPING", "ignored", "purchase; reply layout guessed")
 		return []wire.Frame{{Command: wire.ShoppingReply, Payload: []byte{1, 0, 0, 0}}}
 	case wire.CardUpdate:
 		return updateCard(config.Cards, request.Payload)
 	case wire.RankingData:
 		// An empty ranking. The game fetches four rankings at startup and waits for each
 		// reply before it fetches the next startup data (the stage list, events, versus).
+		slog.Info("stub reply", "command", "RANKING_DATA", "ignored", "rankings: the list is always empty")
 		reply := wire.RankingReply{Status: 1, Body: "1\n1\n0\n"}
 		return []wire.Frame{{Command: wire.RankingDataReply, Payload: reply.Encode()}}
 	case wire.CardReissueTest:
@@ -118,6 +122,7 @@ func respond(config Config, request wire.Frame) []wire.Frame {
 	case wire.ClientEnd:
 		return []wire.Frame{{Command: wire.ClientEndReply}}
 	default:
+		slog.Warn("unanswered command", "id", fmt.Sprintf("%#x", uint32(request.Command)))
 		return nil
 	}
 }

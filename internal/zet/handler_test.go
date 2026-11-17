@@ -124,6 +124,34 @@ func TestHandler_Login_SendsTheSettingsTheCardStored(t *testing.T) {
 	}
 }
 
+func TestHandler_Login_Guest_GetsTheDefaultsAndNoProgress(t *testing.T) {
+	got := strings.Split(post(t, "/login", "player_id=-1"), "\n")
+
+	if got[8] != "5" || got[14] != "1" || got[3+5+25+4] != "0" {
+		t.Fatalf("lines = %q", got)
+	}
+}
+
+func TestHandler_Result_Guest_IsAcknowledged(t *testing.T) {
+	got := post(t, "/result", "player_id=-1&zet=10&stage_id=1&chapter_id=1&clear_flag=1")
+
+	if got != "1\n1\n0\n" {
+		t.Fatalf("body = %q", got)
+	}
+}
+
+func TestHandler_UnknownPath_IsNotFound(t *testing.T) {
+	server, _ := newServer(t)
+	request := httptest.NewRequest("POST", "http://lobby/news", strings.NewReader("t"))
+	recorder := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != 404 {
+		t.Fatalf("status = %d", recorder.Code)
+	}
+}
+
 func TestHandler_Login_CountsTheLogin(t *testing.T) {
 	server, s := newServer(t)
 	player, _ := s.Register("7020392000000001", "Survivor", 0)
