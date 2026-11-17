@@ -4,6 +4,7 @@ go 1.27
 
 require (
 	github.com/Microsoft/go-winio v0.6.4
+	go.yaml.in/yaml/v4 v4.0.0
 	golang.org/x/sys v0.49.0
 	modernc.org/sqlite v1.62.0
 )
