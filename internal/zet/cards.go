@@ -40,7 +40,7 @@ func (s *Server) Select(cardID string) (wire.CardReply, error) {
 	}
 	lines = append(lines, slices.Repeat([]any{0}, emptyAvatarLines)...)
 	lines = append(lines, 0, "", "", 0, player.Exp, 0)
-	lines = append(lines, player.Logins, 0, 0)
+	lines = append(lines, player.Logins, player.VSPlays, player.VSWins)
 
 	var body strings.Builder
 	for _, line := range lines {

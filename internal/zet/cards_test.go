@@ -52,6 +52,19 @@ func TestServer_Select_ReportsExperienceAndLoginsAfterTheEmptyBlocks(t *testing.
 	}
 }
 
+func TestServer_Select_ReportsTheVersusRecordAfterTheLogins(t *testing.T) {
+	server, s := newServer(t)
+	player, _ := s.Register("7020392000000001", "Survivor", 0)
+	s.RecordResult(player.ID, store.Result{VSPlays: 3, VSWins: 2})
+
+	reply, _ := server.Select("7020392000000001")
+
+	lines := strings.Split(reply.Body, "\n")
+	if lines[32] != "3" || lines[33] != "2" {
+		t.Fatalf("vs_plays line = %q, vs_wins line = %q", lines[32], lines[33])
+	}
+}
+
 func TestServer_Select_ReportsTheClasses(t *testing.T) {
 	server, s := newServer(t)
 	player, _ := s.Register("7020392000000001", "Survivor", 0)

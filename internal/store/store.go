@@ -39,6 +39,8 @@ var migrations = []string{
 	`ALTER TABLE players ADD COLUMN mouse_sensitivity INTEGER NOT NULL DEFAULT 3`,
 	`ALTER TABLE players ADD COLUMN mouse_acceleration INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE players ADD COLUMN key_map INTEGER NOT NULL DEFAULT 1`,
+	`ALTER TABLE players ADD COLUMN vs_plays INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE players ADD COLUMN vs_wins INTEGER NOT NULL DEFAULT 0`,
 }
 
 // settingsColumns lists the columns holding a player's [Settings], in field order.
@@ -66,6 +68,8 @@ type Player struct {
 	CoopClassPoint int64
 	VSClassID      int64
 	VSClassPoint   int64
+	VSPlays        int64
+	VSWins         int64
 	Settings       Settings
 }
 
@@ -87,7 +91,7 @@ var DefaultSettings = Settings{MasterVolume: 5, BGMVolume: 5, MouseSensitivity: 
 // Result is what a finished chapter adds to a player's totals. The game computes the classes
 // itself: CoopClassID and VSClassID are the player's classes after the chapter (0 keeps the
 // stored class), and CoopClassPoint and VSClassPoint are the changes in co-op and versus class
-// points, which may be negative.
+// points, which may be negative. VSPlays and VSWins add to the player's versus record.
 type Result struct {
 	Zet            int64
 	Exp            int64
@@ -96,6 +100,8 @@ type Result struct {
 	VSClassPoint   int64
 	CoopClassID    int64
 	VSClassID      int64
+	VSPlays        int64
+	VSWins         int64
 	StageID        int64
 	ChapterID      int64
 	Cleared        bool
@@ -184,9 +190,11 @@ func (s *Store) RecordResult(playerID int64, result Result) error {
 	outcome, err := tx.Exec(`UPDATE players SET zet = zet + ?, exp = exp + ?, score = score + ?,
 		coop_class_point = coop_class_point + ?, vs_class_point = vs_class_point + ?,
 		coop_class_id = COALESCE(NULLIF(?, 0), coop_class_id),
-		vs_class_id = COALESCE(NULLIF(?, 0), vs_class_id)
+		vs_class_id = COALESCE(NULLIF(?, 0), vs_class_id),
+		vs_plays = vs_plays + ?, vs_wins = vs_wins + ?
 		WHERE id = ?`,
-		result.Zet, result.Exp, result.Score, result.CoopClassPoint, result.VSClassPoint, result.CoopClassID, result.VSClassID, playerID)
+		result.Zet, result.Exp, result.Score, result.CoopClassPoint, result.VSClassPoint, result.CoopClassID, result.VSClassID,
+		result.VSPlays, result.VSWins, playerID)
 	if err != nil {
 		return err
 	}
@@ -253,9 +261,9 @@ func (s *Store) updatePlayer(query string, args ...any) error {
 func (s *Store) player(where string, arg any) (Player, error) {
 	var player Player
 	err := s.db.QueryRow(`SELECT id, card_id, name, zet, exp, score, logins, chara_id,
-		coop_class_id, coop_class_point, vs_class_id, vs_class_point, `+settingsColumns+` FROM players WHERE `+where, arg).
+		coop_class_id, coop_class_point, vs_class_id, vs_class_point, vs_plays, vs_wins, `+settingsColumns+` FROM players WHERE `+where, arg).
 		Scan(&player.ID, &player.CardID, &player.Name, &player.Zet, &player.Exp, &player.Score, &player.Logins, &player.CharaID,
-			&player.CoopClassID, &player.CoopClassPoint, &player.VSClassID, &player.VSClassPoint,
+			&player.CoopClassID, &player.CoopClassPoint, &player.VSClassID, &player.VSClassPoint, &player.VSPlays, &player.VSWins,
 			&player.Settings.MasterVolume, &player.Settings.BGMVolume, &player.Settings.MouseHorizontalReverse,
 			&player.Settings.MouseVerticalReverse, &player.Settings.MouseSensitivity, &player.Settings.MouseAcceleration,
 			&player.Settings.KeyMap)

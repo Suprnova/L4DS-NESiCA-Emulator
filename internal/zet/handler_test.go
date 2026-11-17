@@ -105,6 +105,20 @@ func TestHandler_VersusResult_AddsToTheVersusClassPoints(t *testing.T) {
 	}
 }
 
+func TestHandler_VersusResults_CountPlaysAndWins(t *testing.T) {
+	server, s := newServer(t)
+	player, _ := s.Register("7020392000000001", "Survivor", 0)
+	postTo(server, "/result", fmt.Sprintf("player_id=%d&game_mode=7&vs_you_win=1", player.ID))
+	postTo(server, "/result", fmt.Sprintf("player_id=%d&game_mode=7&vs_you_win=0", player.ID))
+
+	postTo(server, "/result", fmt.Sprintf("player_id=%d&game_mode=1&vs_you_win=0", player.ID))
+
+	updated, _ := s.Player(player.ID)
+	if updated.VSPlays != 2 || updated.VSWins != 1 {
+		t.Fatalf("player = %+v", updated)
+	}
+}
+
 func TestHandler_Stages_ListsEveryStageInEachKind(t *testing.T) {
 	s, _ := store.Open(":memory:")
 	t.Cleanup(func() { s.Close() })

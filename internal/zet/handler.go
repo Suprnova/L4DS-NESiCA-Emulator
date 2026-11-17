@@ -112,7 +112,8 @@ func svp(w http.ResponseWriter, r *http.Request) {
 
 // result adds the finished chapter to the player's totals and answers with a success header.
 // class_point is the change in the player's class points: versus points when game_mode, the
-// matching mode, is a versus mode (7 to 10), co-op points otherwise. A guest's result is not kept.
+// matching mode, is a versus mode (7 to 10), co-op points otherwise. A versus result also counts
+// a versus play, and a win when vs_you_win is 1. A guest's result is not kept.
 func (s *Server) result(w http.ResponseWriter, r *http.Request) {
 	defer w.Write([]byte(successHeader))
 	playerID := formInt(r, "player_id")
@@ -133,6 +134,7 @@ func (s *Server) result(w http.ResponseWriter, r *http.Request) {
 	}
 	if mode := formInt(r, "game_mode"); mode >= 7 && mode <= 10 {
 		result.VSClassPoint = formInt(r, "class_point")
+		result.VSPlays, result.VSWins = 1, formInt(r, "vs_you_win")
 	} else {
 		result.CoopClassPoint = formInt(r, "class_point")
 	}
