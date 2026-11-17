@@ -38,7 +38,7 @@ func main() {
 	masterAddr := flag.String("master", ":27010", "UDP address of the matching master")
 	gameServerAddr := flag.String("game-server", "", "UDP address to log game server queries on, such as :27015; it blocks the game's own listen server there")
 	roomServer := flag.String("room-server", "", "IPv4 address and port of a dedicated server, started by hand, that hosts every new room, such as 127.0.0.2:27020")
-	dsDir := flag.String("ds-dir", "", "dedicated server folder built by maketree.ps1; l4ds-aio then runs a dedicated server for each new room (without it or -room-server, rooms are on the creating machine's port 27015)")
+	dsDir := flag.String("ds-dir", "", "server tree built by l4ds-tree; l4ds-aio then runs a dedicated server for each new room (without it or -room-server, rooms are on the creating machine's port 27015)")
 	dsIP := flag.String("ds-ip", "127.0.0.2", "IPv4 address the dedicated servers bind to and rooms are advertised at; not 127.0.0.1, which the game never sends to over the network")
 	dsPort := flag.Uint("ds-port", 27020, "game port of the first dedicated server; the others use the ports after it")
 	dsMax := flag.Int("ds-max", 4, "most dedicated servers running at once")

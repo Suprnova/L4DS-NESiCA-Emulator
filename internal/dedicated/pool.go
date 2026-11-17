@@ -31,7 +31,7 @@ const (
 
 // Config describes the servers a [Pool] runs.
 type Config struct {
-	// Dir is a server tree built by maketree.ps1, holding srcds.exe.
+	// Dir is a server tree built by l4ds-tree, holding srcds.exe.
 	Dir string
 	// IP is the address the servers bind to and rooms are advertised at.
 	IP netip.Addr
