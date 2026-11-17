@@ -22,11 +22,11 @@ func openStore(t *testing.T) *store.Store {
 	return s
 }
 
-const card = "7020392010281502"
+const card = "7020392000000100"
 
 func register(t *testing.T, s *store.Store) store.Player {
 	t.Helper()
-	player, err := s.Register(card, "Nova", 3)
+	player, err := s.Register(card, "Mika", 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,10 +46,10 @@ func TestPlayerByCard_UnknownCard_ReturnsErrNotRegistered(t *testing.T) {
 func TestRegister_NewCard_CreatesThePlayer(t *testing.T) {
 	s := openStore(t)
 
-	player, err := s.Register(card, "Nova", 3)
+	player, err := s.Register(card, "Mika", 3)
 
 	found, _ := s.PlayerByCard(card)
-	if err != nil || player.ID == 0 || found.ID != player.ID || found.Name != "Nova" || found.CharaID != 3 {
+	if err != nil || player.ID == 0 || found.ID != player.ID || found.Name != "Mika" || found.CharaID != 3 {
 		t.Fatalf("Register() = %+v, %v; found %+v", player, err, found)
 	}
 }
@@ -173,12 +173,12 @@ func TestOpen_DatabaseFromAnEarlierSchema_IsMigrated(t *testing.T) {
 	path := t.TempDir() + "/old.db"
 	old, _ := sql.Open("sqlite", path)
 	old.Exec(`CREATE TABLE players (id INTEGER PRIMARY KEY, card_id TEXT NOT NULL UNIQUE, name TEXT NOT NULL, zet INTEGER NOT NULL DEFAULT 0, exp INTEGER NOT NULL DEFAULT 0, score INTEGER NOT NULL DEFAULT 0)`)
-	old.Exec(`INSERT INTO players (card_id, name, zet) VALUES ('7020392010281502', 'Old', 7)`)
+	old.Exec(`INSERT INTO players (card_id, name, zet) VALUES ('7020392000000100', 'Old', 7)`)
 	old.Close()
 
 	s, err := store.Open(path)
 
-	player, _ := s.PlayerByCard("7020392010281502")
+	player, _ := s.PlayerByCard("7020392000000100")
 	if err != nil || player.Name != "Old" || player.Zet != 7 || player.Logins != 0 {
 		t.Fatalf("player = %+v, err = %v", player, err)
 	}

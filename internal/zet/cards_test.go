@@ -100,19 +100,19 @@ func TestServer_ReissueTest_ReportsNoReservation(t *testing.T) {
 
 func TestServer_Insert_RegistersTheDecodedPlayer(t *testing.T) {
 	server, s := newServer(t)
-	name := url.QueryEscape(base64.StdEncoding.EncodeToString([]byte("Nova ノヴァ")))
+	name := url.QueryEscape(base64.StdEncoding.EncodeToString([]byte("Mika ミカ")))
 
 	body, err := server.Insert("7020392000000002", "tenpo_id=1,player_name="+name+",chara_id=3")
 
 	player, _ := s.PlayerByCard("7020392000000002")
-	if err != nil || body != "1\n1\n"+strconv.FormatInt(player.ID, 10)+"\n" || player.Name != "Nova ノヴァ" || player.CharaID != 3 {
+	if err != nil || body != "1\n1\n"+strconv.FormatInt(player.ID, 10)+"\n" || player.Name != "Mika ミカ" || player.CharaID != 3 {
 		t.Fatalf("Insert() = %q, %v; player %+v", body, err, player)
 	}
 }
 
 func TestServer_Update_Name_RenamesThePlayer(t *testing.T) {
 	server, s := newServer(t)
-	s.Register("7020392000000002", "Nova", 0)
+	s.Register("7020392000000002", "Mika", 0)
 	name := url.QueryEscape(base64.StdEncoding.EncodeToString([]byte("ノヴァ")))
 
 	err := server.Update("7020392000000002", 1, "request_flag=0,player_name="+name)
@@ -125,19 +125,19 @@ func TestServer_Update_Name_RenamesThePlayer(t *testing.T) {
 
 func TestServer_Update_UnknownType_ChangesNothing(t *testing.T) {
 	server, s := newServer(t)
-	s.Register("7020392000000002", "Nova", 0)
+	s.Register("7020392000000002", "Mika", 0)
 
 	err := server.Update("7020392000000002", 2, "player_name=x")
 
 	player, _ := s.PlayerByCard("7020392000000002")
-	if err != nil || player.Name != "Nova" || player.Settings != store.DefaultSettings {
+	if err != nil || player.Name != "Mika" || player.Settings != store.DefaultSettings {
 		t.Fatalf("Update() = %v; player %+v", err, player)
 	}
 }
 
 func TestServer_Insert_RegisteredCard_ReturnsAnError(t *testing.T) {
 	server, s := newServer(t)
-	s.Register("7020392000000002", "Nova", 0)
+	s.Register("7020392000000002", "Mika", 0)
 
 	_, err := server.Insert("7020392000000002", "tenpo_id=1,player_name=,chara_id=1")
 
