@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"l4ds-nesica-emulator/internal/game"
+	"l4ds-nesica-emulator/internal/store"
 	"l4ds-nesica-emulator/internal/zet"
 )
 
@@ -88,6 +90,23 @@ func TestHandler_Result_KeepsTheClassesTheGameReports(t *testing.T) {
 	updated, _ := s.Player(player.ID)
 	if updated.CoopClassPoint != 25 || updated.CoopClassID != 2 || updated.VSClassID != 1 {
 		t.Fatalf("player = %+v", updated)
+	}
+}
+
+func TestHandler_Stages_ListsEveryStageInEachKind(t *testing.T) {
+	s, _ := store.Open(":memory:")
+	t.Cleanup(func() { s.Close() })
+	stages := []game.Stage{{ID: 9, Name: "Crash Course", Chapters: []game.Chapter{{ID: 1, Name: "1: Alleys"}, {ID: 2, Name: "2: Truck Depot"}}}}
+	server := zet.NewServer(s, nil, stages)
+
+	got := strings.Split(postTo(server, "/stages", ""), "\n")
+
+	stage := func(kind string) []string {
+		return []string{"9", kind, "0", "Crash Course", "2", "1", "1: Alleys", "2", "2: Truck Depot"}
+	}
+	want := slices.Concat([]string{"1", "1", "0", "4"}, stage("1"), stage("2"), stage("3"), stage("4"), []string{""})
+	if !slices.Equal(got, want) {
+		t.Fatalf("lines = %q, want %q", got, want)
 	}
 }
 

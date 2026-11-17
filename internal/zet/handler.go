@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"l4ds-nesica-emulator/internal/game"
 	"l4ds-nesica-emulator/internal/store"
@@ -15,12 +16,14 @@ import (
 type Server struct {
 	store  *store.Store
 	levels *game.LevelTable
+	stages []game.Stage
 }
 
-// NewServer returns a server that keeps its players in s and derives their levels from levels.
-// A nil table makes every player level 1.
-func NewServer(s *store.Store, levels *game.LevelTable) *Server {
-	return &Server{store: s, levels: levels}
+// NewServer returns a server that keeps its players in s, derives their levels from levels and
+// offers stages in every mode. A nil table makes every player level 1; with no stages the game
+// falls back to its own stage table.
+func NewServer(s *store.Store, levels *game.LevelTable, stages []game.Stage) *Server {
+	return &Server{store: s, levels: levels, stages: stages}
 }
 
 // Handler returns the server's HTTP handler.
@@ -36,7 +39,28 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /result", s.result)
 	mux.HandleFunc("POST /close", reply("1\n1\n0\n"))
 	mux.HandleFunc("POST /svp", svp)
+	mux.HandleFunc("POST /stages", s.stageList)
 	return mux
+}
+
+// stageKinds are the stage lists the game keeps, one per way of playing: national co-op, store
+// co-op, clan co-op and single play.
+var stageKinds = []int{1, 2, 3, 4}
+
+// stageList answers the stage list the game fetches at startup: each stage in every kind, with
+// its id, kind, "new" flag, name and chapters (id and name). The stage select offers these
+// stages, opening each chapter once the one before it is cleared.
+func (s *Server) stageList(w http.ResponseWriter, _ *http.Request) {
+	lines := []string{"1", "1", "0", strconv.Itoa(len(s.stages) * len(stageKinds))}
+	for _, kind := range stageKinds {
+		for _, stage := range s.stages {
+			lines = append(lines, strconv.Itoa(stage.ID), strconv.Itoa(kind), "0", stage.Name, strconv.Itoa(len(stage.Chapters)))
+			for _, chapter := range stage.Chapters {
+				lines = append(lines, strconv.Itoa(chapter.ID), chapter.Name)
+			}
+		}
+	}
+	w.Write([]byte(strings.Join(lines, "\n") + "\n"))
 }
 
 // reply answers every request with a fixed body.

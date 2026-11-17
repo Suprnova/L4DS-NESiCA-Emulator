@@ -54,10 +54,15 @@ func main() {
 	}
 
 	var levels *game.LevelTable
+	var stages []game.Stage
 	if *gameDir != "" {
 		var err error
 		if levels, err = loadLevels(*gameDir); err != nil {
 			slog.Error("load level table", "game-dir", *gameDir, "error", err)
+			os.Exit(1)
+		}
+		if stages, err = loadStages(*gameDir); err != nil {
+			slog.Error("load stages", "game-dir", *gameDir, "error", err)
 			os.Exit(1)
 		}
 	}
@@ -68,7 +73,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer players.Close()
-	server := zet.NewServer(players, levels)
+	server := zet.NewServer(players, levels, stages)
 
 	config := nesys.Config{
 		Store:          wire.StoreInfo{ID: 1, Name: "L4DS Emulator", Prefecture: *prefecture},
@@ -210,4 +215,37 @@ func loadLevels(gameDir string) (*game.LevelTable, error) {
 	}
 	defer file.Close()
 	return game.ParseLevelTable(file)
+}
+
+// stageNameFiles are the localization files that name the stages and chapters, in the order
+// the game searches them reversed, so the update folder's text wins.
+var stageNameFiles = []string{
+	filepath.Join("left4dead2", "resource", "l4d360ui_japanese.txt"),
+	filepath.Join("update", "resource", "l4d360ui_tu_japanese.txt"),
+}
+
+// loadStages reads the game's stage map table and names its stages and chapters in Japanese.
+func loadStages(gameDir string) ([]game.Stage, error) {
+	tokens := map[string]string{}
+	for _, name := range stageNameFiles {
+		if err := parseTokens(filepath.Join(gameDir, name), tokens); err != nil {
+			return nil, err
+		}
+	}
+
+	file, err := os.Open(filepath.Join(gameDir, "left4dead2", "resource", "stage_solo.txt"))
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	return game.ParseStages(file, tokens)
+}
+
+func parseTokens(path string, tokens map[string]string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	return game.ParseTokens(file, tokens)
 }
