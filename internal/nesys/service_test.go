@@ -259,6 +259,26 @@ func TestServe_RankingData_RepliesWithAnEmptyRanking(t *testing.T) {
 	}
 }
 
+type fakeRankings map[uint32]string
+
+func (r fakeRankings) Ranking(kind uint32) (string, error) { return r[kind], nil }
+
+func TestServe_RankingData_RepliesWithTheRankingOfTheRequestedKind(t *testing.T) {
+	config := testConfig
+	config.Rankings = fakeRankings{30: "1\n1\n1\nentry\n"}
+	game, service := net.Pipe()
+	t.Cleanup(func() { game.Close() })
+	go nesys.Serve(service, config)
+	request := []byte("\x1e\x00\x00\x00\x00\x00\x00\x00\x0b\x00\x00\x00tenpo_id=1\x00\x00\x00\x00\x00")
+
+	reply := exchange(t, game, wire.RankingData, request)
+
+	want := "\x01\x00\x00\x00\x0c\x00\x00\x001\n1\n1\nentry\n"
+	if reply.Command != wire.RankingDataReply || string(reply.Payload) != want {
+		t.Fatalf("reply = %+v", reply)
+	}
+}
+
 func TestServe_IncomeEnd_RepliesWithPlayerAndStatus(t *testing.T) {
 	game := startGame(t)
 

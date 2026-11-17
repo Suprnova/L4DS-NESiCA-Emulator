@@ -62,6 +62,15 @@ func (r CardReply) Encode() []byte {
 	return append(buf, r.Body...)
 }
 
+// ParseRankingKind reads which ranking a RankingData request asks for: the first u32 of the
+// payload, which the game sets to 10, 20, 30 or 40.
+func ParseRankingKind(payload []byte) (uint32, error) {
+	if len(payload) < 4 {
+		return 0, ErrBadFrame
+	}
+	return binary.LittleEndian.Uint32(payload), nil
+}
+
 // RankingReply is the payload of RankingDataReply: a status and a line-oriented body of
 // result, API_ID, the entry count and the entries.
 type RankingReply struct {

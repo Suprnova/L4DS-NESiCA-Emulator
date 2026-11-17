@@ -29,6 +29,17 @@ type Config struct {
 
 	// Cards answers the card commands. A nil value leaves them unanswered.
 	Cards Cards
+
+	// Rankings answers the ranking requests. A nil value answers every ranking with an empty
+	// one.
+	Rankings Rankings
+}
+
+// Rankings answers the game's ranking requests.
+type Rankings interface {
+	// Ranking returns the reply body of the ranking of the given kind: result, API_ID, the
+	// entry count and the entries.
+	Ranking(kind uint32) (string, error)
 }
 
 // Cards answers the game's card commands.
@@ -108,11 +119,7 @@ func respond(config Config, request wire.Frame) []wire.Frame {
 	case wire.CardUpdate:
 		return updateCard(config.Cards, request.Payload)
 	case wire.RankingData:
-		// An empty ranking. The game fetches four rankings at startup and waits for each
-		// reply before it fetches the next startup data (the stage list, events, versus).
-		slog.Info("stub reply", "command", "RANKING_DATA", "ignored", "rankings: the list is always empty")
-		reply := wire.RankingReply{Status: 1, Body: "1\n1\n0\n"}
-		return []wire.Frame{{Command: wire.RankingDataReply, Payload: reply.Encode()}}
+		return ranking(config.Rankings, request.Payload)
 	case wire.CardReissueTest:
 		return reissueTest(config.Cards, request.Payload)
 	case wire.CardInsert:
@@ -200,6 +207,24 @@ func insertCard(cards Cards, payload []byte) []wire.Frame {
 
 	reply := wire.CardReply{Status: 1, Body: body}
 	return []wire.Frame{{Command: wire.CardInsertReply, Payload: reply.Encode()}}
+}
+
+// emptyRanking is the body of a ranking with no entries.
+const emptyRanking = "1\n1\n0\n"
+
+// ranking answers a ranking request. The game fetches four rankings at startup and waits for
+// each reply before it fetches the next startup data (the stage list, events, versus), so a
+// request that cannot be answered gets an empty ranking.
+func ranking(rankings Rankings, payload []byte) []wire.Frame {
+	body := emptyRanking
+	if kind, err := wire.ParseRankingKind(payload); err != nil || rankings == nil {
+		slog.Info("stub reply", "command", "RANKING_DATA", "ignored", "rankings: no ranking source")
+	} else if body, err = rankings.Ranking(kind); err != nil {
+		slog.Error("ranking", "kind", kind, "error", err)
+		body = emptyRanking
+	}
+	reply := wire.RankingReply{Status: 1, Body: body}
+	return []wire.Frame{{Command: wire.RankingDataReply, Payload: reply.Encode()}}
 }
 
 func reissueTest(cards Cards, payload []byte) []wire.Frame {

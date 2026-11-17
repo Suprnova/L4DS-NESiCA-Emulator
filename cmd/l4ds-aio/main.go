@@ -30,6 +30,9 @@ import (
 	"l4ds-nesica-emulator/internal/zet"
 )
 
+// storeName is the store the game shows on its network screen, in room lists and in rankings.
+const storeName = "L4DS Emulator"
+
 func main() {
 	path := flag.String("pipe", pipe.DefaultPath, "named pipe the game connects to")
 	serverKey := flag.String("server-key", "dev.game.zet.square-enix.co.jp", "master and lobby host string sent to the game")
@@ -55,7 +58,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	var catalog zet.Catalog
+	catalog := zet.Catalog{StoreName: storeName}
 	if *gameDir != "" {
 		var err error
 		if catalog.Levels, err = loadLevels(*gameDir); err != nil {
@@ -80,13 +83,14 @@ func main() {
 	server := zet.NewServer(players, catalog)
 
 	config := nesys.Config{
-		Store:          wire.StoreInfo{ID: 1, Name: "L4DS Emulator", Prefecture: *prefecture},
+		Store:          wire.StoreInfo{ID: 1, Name: storeName, Prefecture: *prefecture},
 		ServerKey:      *serverKey,
 		Adapter:        wire.AdapterDetails{IP: "127.0.0.1", MAC: "020000000001"},
 		Public:         wire.PublicAddress{IP: "127.0.0.1"},
 		ServiceVersion: "2.79 2014/07/08",
 		HTTP:           logRequests(server.Handler()),
 		Cards:          server,
+		Rankings:       server,
 	}
 
 	listener, err := pipe.Listen(*path)
