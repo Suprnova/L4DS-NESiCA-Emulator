@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 
 	"l4ds-nesica-emulator/internal/dedicated"
 	"l4ds-nesica-emulator/internal/game"
@@ -98,7 +99,11 @@ func main() {
 		os.Exit(1)
 	}
 	defer master.Close()
-	go matching.NewMaster(hosts).Serve(master)
+	go matching.NewMaster(matching.Config{
+		Hosts:      hosts,
+		PlayerName: playerName(players),
+		StoreName:  config.Store.Name,
+	}).Serve(master)
 
 	if *gameServerAddr != "" {
 		gameServer, err := net.ListenPacket("udp", *gameServerAddr)
@@ -167,6 +172,16 @@ func roomHosts(roomServer, ip string, firstPort uint, config dedicated.Config) (
 		return pool, pool, nil
 	}
 	return nil, nil, nil
+}
+
+// playerName returns a lookup of player names for room lists, falling back to the player id.
+func playerName(players *store.Store) func(int64) string {
+	return func(id int64) string {
+		if player, err := players.Player(id); err == nil && player.Name != "" {
+			return player.Name
+		}
+		return strconv.FormatInt(id, 10)
+	}
 }
 
 func serve(conn net.Conn, config nesys.Config) {
