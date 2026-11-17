@@ -67,6 +67,38 @@ func (s *Server) Insert(cardID, data string) (string, error) {
 	return fmt.Sprintf("1\n1\n%d\n", player.ID), nil
 }
 
+// Data types of a card update.
+const (
+	updateName     = 1 // "request_flag=0,player_name=<name encoded as in Insert>"
+	updateSettings = 3 // "volume=,volume_bgm=,mouse_acce=,mouse_horizon=,mouse_vertical=,mouse_sens=,key_type="
+)
+
+// Update stores what the game writes to a card: a new player name or the player's settings.
+// Other data types are ignored.
+func (s *Server) Update(cardID string, dataType uint32, data string) error {
+	fields := parseFields(data)
+	switch dataType {
+	case updateName:
+		return s.store.Rename(cardID, decodeName(fields["player_name"]))
+	case updateSettings:
+		number := func(key string) int64 {
+			value, _ := strconv.ParseInt(fields[key], 10, 64)
+			return value
+		}
+		return s.store.UpdateSettings(cardID, store.Settings{
+			MasterVolume:           number("volume"),
+			BGMVolume:              number("volume_bgm"),
+			MouseHorizontalReverse: number("mouse_horizon"),
+			MouseVerticalReverse:   number("mouse_vertical"),
+			MouseSensitivity:       number("mouse_sens"),
+			MouseAcceleration:      number("mouse_acce"),
+			KeyMap:                 number("key_type"),
+		})
+	default:
+		return nil
+	}
+}
+
 // parseFields splits comma-separated key=value text.
 func parseFields(data string) map[string]string {
 	fields := map[string]string{}

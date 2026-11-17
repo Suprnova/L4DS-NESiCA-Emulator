@@ -43,6 +43,10 @@ type Cards interface {
 	// Insert registers a player to a card from the game's comma-separated key=value text and
 	// returns the reply body.
 	Insert(cardID, data string) (string, error)
+
+	// Update stores the comma-separated key=value text the game writes to a card; dataType
+	// says what the text holds.
+	Update(cardID string, dataType uint32, data string) error
 }
 
 // Serve answers the game's commands on conn until the game ends the session or the
@@ -99,9 +103,7 @@ func respond(config Config, request wire.Frame) []wire.Frame {
 	case wire.Shopping:
 		return []wire.Frame{{Command: wire.ShoppingReply, Payload: []byte{1, 0, 0, 0}}}
 	case wire.CardUpdate:
-		slog.Info("card update", "payload", fmt.Sprintf("%q", request.Payload[min(len(request.Payload), 16):]))
-		reply := wire.CardReply{Status: 1, Body: "1\n1\n"}
-		return []wire.Frame{{Command: wire.CardUpdateReply, Payload: reply.Encode()}}
+		return updateCard(config.Cards, request.Payload)
 	case wire.RankingData:
 		// An empty ranking. The game fetches four rankings at startup and waits for each
 		// reply before it fetches the next startup data (the stage list, events, versus).
@@ -157,6 +159,25 @@ func selectCard(cards Cards, payload []byte) []wire.Frame {
 		return nil
 	}
 	return []wire.Frame{{Command: wire.CardSelectReply, Payload: reply.Encode()}}
+}
+
+// updateCard stores a card update and acknowledges it. The game has nothing to do on a failure,
+// so a failed update is logged and acknowledged too.
+func updateCard(cards Cards, payload []byte) []wire.Frame {
+	request, err := wire.ParseCardWriteRequest(payload)
+	if err != nil {
+		slog.Warn("card update", "error", err, "payload", fmt.Sprintf("%q", payload))
+	} else {
+		slog.Info("card update", "card", request.CardID, "type", request.DataType, "data", string(request.Data))
+		if cards != nil {
+			if err := cards.Update(request.CardID, request.DataType, string(request.Data)); err != nil {
+				slog.Error("card update", "card", request.CardID, "error", err)
+			}
+		}
+	}
+
+	reply := wire.CardReply{Status: 1, Body: "1\n1\n"}
+	return []wire.Frame{{Command: wire.CardUpdateReply, Payload: reply.Encode()}}
 }
 
 func insertCard(cards Cards, payload []byte) []wire.Frame {

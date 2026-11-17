@@ -32,7 +32,18 @@ var migrations = []string{
 	`ALTER TABLE players ADD COLUMN coop_class_point INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE players ADD COLUMN vs_class_id INTEGER NOT NULL DEFAULT 1`,
 	`ALTER TABLE players ADD COLUMN vs_class_point INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE players ADD COLUMN master_volume INTEGER NOT NULL DEFAULT 5`,
+	`ALTER TABLE players ADD COLUMN bgm_volume INTEGER NOT NULL DEFAULT 5`,
+	`ALTER TABLE players ADD COLUMN mouse_horizontal_reverse INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE players ADD COLUMN mouse_vertical_reverse INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE players ADD COLUMN mouse_sensitivity INTEGER NOT NULL DEFAULT 3`,
+	`ALTER TABLE players ADD COLUMN mouse_acceleration INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE players ADD COLUMN key_map INTEGER NOT NULL DEFAULT 1`,
 }
+
+// settingsColumns lists the columns holding a player's [Settings], in field order.
+const settingsColumns = `master_volume, bgm_volume, mouse_horizontal_reverse, mouse_vertical_reverse,
+	mouse_sensitivity, mouse_acceleration, key_map`
 
 // ErrNotRegistered reports that no player is registered to a card.
 var ErrNotRegistered = errors.New("store: card is not registered")
@@ -55,7 +66,23 @@ type Player struct {
 	CoopClassPoint int64
 	VSClassID      int64
 	VSClassPoint   int64
+	Settings       Settings
 }
+
+// Settings are the options a player changes on the cabinet's settings screen. A new player has
+// the volumes at 5, the mouse unreversed at sensitivity 3 without acceleration, and key map 1.
+type Settings struct {
+	MasterVolume           int64
+	BGMVolume              int64
+	MouseHorizontalReverse int64
+	MouseVerticalReverse   int64
+	MouseSensitivity       int64
+	MouseAcceleration      int64
+	KeyMap                 int64
+}
+
+// DefaultSettings are the settings a new player starts with.
+var DefaultSettings = Settings{MasterVolume: 5, BGMVolume: 5, MouseSensitivity: 3, KeyMap: 1}
 
 // Result is what a finished chapter adds to a player's totals. The game computes the classes
 // itself: CoopClassID and VSClassID are the player's classes after the chapter (0 keeps the
@@ -193,6 +220,18 @@ func (s *Store) Clears(playerID int64) ([]Clear, error) {
 	return clears, rows.Err()
 }
 
+// UpdateSettings replaces the settings of the player registered to a card.
+func (s *Store) UpdateSettings(cardID string, settings Settings) error {
+	return s.updatePlayer(`UPDATE players SET (`+settingsColumns+`) = (?, ?, ?, ?, ?, ?, ?) WHERE card_id = ?`,
+		settings.MasterVolume, settings.BGMVolume, settings.MouseHorizontalReverse, settings.MouseVerticalReverse,
+		settings.MouseSensitivity, settings.MouseAcceleration, settings.KeyMap, cardID)
+}
+
+// Rename changes the name of the player registered to a card.
+func (s *Store) Rename(cardID, name string) error {
+	return s.updatePlayer(`UPDATE players SET name = ? WHERE card_id = ?`, name, cardID)
+}
+
 // RecordLogin counts one more login for a player.
 func (s *Store) RecordLogin(playerID int64) error {
 	return s.updatePlayer(`UPDATE players SET logins = logins + 1 WHERE id = ?`, playerID)
@@ -212,8 +251,11 @@ func (s *Store) updatePlayer(query string, args ...any) error {
 func (s *Store) player(where string, arg any) (Player, error) {
 	var player Player
 	err := s.db.QueryRow(`SELECT id, card_id, name, zet, exp, score, logins, chara_id,
-		coop_class_id, coop_class_point, vs_class_id, vs_class_point FROM players WHERE `+where, arg).
+		coop_class_id, coop_class_point, vs_class_id, vs_class_point, `+settingsColumns+` FROM players WHERE `+where, arg).
 		Scan(&player.ID, &player.CardID, &player.Name, &player.Zet, &player.Exp, &player.Score, &player.Logins, &player.CharaID,
-			&player.CoopClassID, &player.CoopClassPoint, &player.VSClassID, &player.VSClassPoint)
+			&player.CoopClassID, &player.CoopClassPoint, &player.VSClassID, &player.VSClassPoint,
+			&player.Settings.MasterVolume, &player.Settings.BGMVolume, &player.Settings.MouseHorizontalReverse,
+			&player.Settings.MouseVerticalReverse, &player.Settings.MouseSensitivity, &player.Settings.MouseAcceleration,
+			&player.Settings.KeyMap)
 	return player, err
 }

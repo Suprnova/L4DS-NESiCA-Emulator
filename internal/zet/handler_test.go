@@ -110,6 +110,20 @@ func TestHandler_Stages_ListsEveryStageInEachKind(t *testing.T) {
 	}
 }
 
+func TestHandler_Login_SendsTheSettingsTheCardStored(t *testing.T) {
+	server, s := newServer(t)
+	player, _ := s.Register("7020392000000001", "Survivor", 0)
+	server.Update("7020392000000001", 3, "volume=2,volume_bgm=7,mouse_acce=1,mouse_horizon=1,mouse_vertical=0,mouse_sens=9,key_type=2")
+
+	lines := strings.Split(postTo(server, "/login", fmt.Sprintf("player_id=%d", player.ID)), "\n")
+
+	got := lines[3+5 : 3+5+25]
+	want := slices.Concat([]string{"2", "7", "1", "0", "9", "1", "2"}, slices.Repeat([]string{"0"}, 18))
+	if !slices.Equal(got, want) {
+		t.Fatalf("config lines = %q, want %q", got, want)
+	}
+}
+
 func TestHandler_Login_CountsTheLogin(t *testing.T) {
 	server, s := newServer(t)
 	player, _ := s.Register("7020392000000001", "Survivor", 0)

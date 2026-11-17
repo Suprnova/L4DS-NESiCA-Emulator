@@ -97,6 +97,31 @@ func TestServer_Insert_RegistersTheDecodedPlayer(t *testing.T) {
 	}
 }
 
+func TestServer_Update_Name_RenamesThePlayer(t *testing.T) {
+	server, s := newServer(t)
+	s.Register("7020392000000002", "Nova", 0)
+	name := url.QueryEscape(base64.StdEncoding.EncodeToString([]byte("ノヴァ")))
+
+	err := server.Update("7020392000000002", 1, "request_flag=0,player_name="+name)
+
+	player, _ := s.PlayerByCard("7020392000000002")
+	if err != nil || player.Name != "ノヴァ" {
+		t.Fatalf("Update() = %v; name %q", err, player.Name)
+	}
+}
+
+func TestServer_Update_UnknownType_ChangesNothing(t *testing.T) {
+	server, s := newServer(t)
+	s.Register("7020392000000002", "Nova", 0)
+
+	err := server.Update("7020392000000002", 2, "player_name=x")
+
+	player, _ := s.PlayerByCard("7020392000000002")
+	if err != nil || player.Name != "Nova" || player.Settings != store.DefaultSettings {
+		t.Fatalf("Update() = %v; player %+v", err, player)
+	}
+}
+
 func TestServer_Insert_RegisteredCard_ReturnsAnError(t *testing.T) {
 	server, s := newServer(t)
 	s.Register("7020392000000002", "Nova", 0)

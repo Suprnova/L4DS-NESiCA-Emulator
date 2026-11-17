@@ -14,14 +14,23 @@ import (
 // thrus, eventprizes, comps).
 const emptyGroups = 5
 
-// defaultConfig lists the config_values of the login reply: master volume, bgm volume,
-// mouse horizontal and vertical reverse, mouse sensitivity and acceleration, key map, then
-// the controller, mouse button and radio bindings.
-var defaultConfig = []int{
-	5, 5, 0, 0, 3, 0, 1,
-	0, 0, 0, 0,
-	0, 0, 0, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0,
+// defaultBindings is the number of config_values after the settings: the controller, mouse
+// button and radio bindings, which the cabinet never changes. 0 keeps the game's defaults.
+const defaultBindings = 18
+
+// configLines lists the config_values of the login reply: the player's settings (master
+// volume, bgm volume, mouse horizontal and vertical reverse, mouse sensitivity and
+// acceleration, key map), then the bindings.
+func configLines(settings store.Settings) []string {
+	values := []int64{
+		settings.MasterVolume, settings.BGMVolume, settings.MouseHorizontalReverse, settings.MouseVerticalReverse,
+		settings.MouseSensitivity, settings.MouseAcceleration, settings.KeyMap,
+	}
+	lines := slices.Repeat([]string{"0"}, len(values)+defaultBindings)
+	for i, value := range values {
+		lines[i] = strconv.FormatInt(value, 10)
+	}
+	return lines
 }
 
 // unusedLoginLines are the lines between the config and the stage progress: force_exit,
@@ -53,21 +62,24 @@ func stageLines(clears []store.Clear) []string {
 	return lines
 }
 
-// login counts the login and answers with a success header, no bonuses, the default player
-// settings and the player's stage progress.
+// login counts the login and answers with a success header, no bonuses, the player's settings
+// and their stage progress. An unknown player gets the default settings.
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	playerID := formInt(r, "player_id")
 	if err := s.store.RecordLogin(playerID); err != nil {
 		slog.Error("record login", "player", playerID, "error", err)
 	}
 
+	settings := store.DefaultSettings
+	if player, err := s.store.Player(playerID); err == nil {
+		settings = player.Settings
+	}
+
 	lines := []string{"1", "1", "0"}
 	for range emptyGroups {
 		lines = append(lines, "0")
 	}
-	for _, value := range defaultConfig {
-		lines = append(lines, strconv.Itoa(value))
-	}
+	lines = append(lines, configLines(settings)...)
 	for range unusedLoginLines {
 		lines = append(lines, "0")
 	}

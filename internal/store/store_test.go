@@ -100,6 +100,51 @@ func TestRecordResult_NoClasses_KeepsTheStoredClasses(t *testing.T) {
 	}
 }
 
+func TestRegister_NewPlayer_HasTheDefaultSettings(t *testing.T) {
+	s := openStore(t)
+
+	player := register(t, s)
+
+	if player.Settings != store.DefaultSettings {
+		t.Fatalf("settings = %+v, want %+v", player.Settings, store.DefaultSettings)
+	}
+}
+
+func TestUpdateSettings_ReplacesTheSettings(t *testing.T) {
+	s := openStore(t)
+	player := register(t, s)
+	settings := store.Settings{MasterVolume: 2, BGMVolume: 7, MouseHorizontalReverse: 1, MouseVerticalReverse: 1, MouseSensitivity: 9, MouseAcceleration: 1, KeyMap: 2}
+
+	err := s.UpdateSettings(card, settings)
+
+	got, _ := s.Player(player.ID)
+	if err != nil || got.Settings != settings {
+		t.Fatalf("settings = %+v, err = %v", got.Settings, err)
+	}
+}
+
+func TestRename_ChangesTheName(t *testing.T) {
+	s := openStore(t)
+	player := register(t, s)
+
+	err := s.Rename(card, "Survivor")
+
+	got, _ := s.Player(player.ID)
+	if err != nil || got.Name != "Survivor" {
+		t.Fatalf("name = %q, err = %v", got.Name, err)
+	}
+}
+
+func TestUpdateSettings_UnknownCard_ReturnsAnError(t *testing.T) {
+	s := openStore(t)
+
+	err := s.UpdateSettings(card, store.Settings{})
+
+	if err == nil {
+		t.Fatal("UpdateSettings() error = nil")
+	}
+}
+
 func TestRecordResult_UnknownPlayer_ReturnsAnError(t *testing.T) {
 	s := openStore(t)
 

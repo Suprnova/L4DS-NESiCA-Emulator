@@ -153,6 +153,40 @@ func (fakeCards) Insert(cardID, data string) (string, error) {
 	return "1\n1\n7\n", nil
 }
 
+func (fakeCards) Update(cardID string, dataType uint32, data string) error { return nil }
+
+// updateRecorder is a card server that reports each card update on a channel.
+type updateRecorder struct {
+	fakeCards
+	updates chan string
+}
+
+func (r updateRecorder) Update(cardID string, dataType uint32, data string) error {
+	r.updates <- fmt.Sprintf("%s %d %s", cardID, dataType, data)
+	return nil
+}
+
+func TestServe_CardUpdate_PassesTheDataToTheCards(t *testing.T) {
+	config := testConfig
+	cards := updateRecorder{updates: make(chan string, 1)}
+	config.Cards = cards
+	game, service := net.Pipe()
+	t.Cleanup(func() { game.Close() })
+	go nesys.Serve(service, config)
+	payload := make([]byte, 32)
+	copy(payload, "7020392000000001")
+	binary.LittleEndian.PutUint32(payload[24:], 3)
+	binary.LittleEndian.PutUint32(payload[28:], 8)
+	payload = append(payload, "volume=2"...)
+
+	reply := exchange(t, game, wire.CardUpdate, payload)
+
+	want := wire.CardReply{Status: 1, Body: "1\n1\n"}.Encode()
+	if got := <-cards.updates; got != "7020392000000001 3 volume=2" || reply.Command != wire.CardUpdateReply || string(reply.Payload) != string(want) {
+		t.Fatalf("update = %q, reply = %+v", got, reply)
+	}
+}
+
 func TestServe_CardSelect_RepliesWithTheCardsBody(t *testing.T) {
 	config := testConfig
 	config.Cards = fakeCards{}
