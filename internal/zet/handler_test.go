@@ -190,11 +190,23 @@ func TestHandler_Login_CountsTheLogin(t *testing.T) {
 	}
 }
 
+func TestHandler_EventOrVersusResult_LeavesTheStageProgressAlone(t *testing.T) {
+	server, s := newServer(t)
+	player, _ := s.Register("7020392000000001", "Survivor", 0)
+	postTo(server, "/result", fmt.Sprintf("player_id=%d&game_mode=2&stage_id=1&chapter_id=1&clear_flag=1&campaign_flag=0", player.ID))
+
+	lines := strings.Split(postTo(server, "/login", fmt.Sprintf("player_id=%d", player.ID)), "\n")
+
+	if got := lines[3+5+25+4]; got != "0" {
+		t.Fatalf("stage count line = %q, want 0", got)
+	}
+}
+
 func TestHandler_Login_ReportsClearedStagesAfterTheConfig(t *testing.T) {
 	server, s := newServer(t)
 	player, _ := s.Register("7020392000000001", "Survivor", 0)
-	postTo(server, "/result", fmt.Sprintf("player_id=%d&stage_id=1&chapter_id=1&clear_flag=1", player.ID))
-	postTo(server, "/result", fmt.Sprintf("player_id=%d&stage_id=1&chapter_id=2&clear_flag=1", player.ID))
+	postTo(server, "/result", fmt.Sprintf("player_id=%d&stage_id=1&chapter_id=1&clear_flag=1&campaign_flag=1", player.ID))
+	postTo(server, "/result", fmt.Sprintf("player_id=%d&stage_id=1&chapter_id=2&clear_flag=1&campaign_flag=1", player.ID))
 
 	lines := strings.Split(postTo(server, "/login", fmt.Sprintf("player_id=%d", player.ID)), "\n")
 
