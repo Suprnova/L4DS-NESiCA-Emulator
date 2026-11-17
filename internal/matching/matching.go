@@ -154,8 +154,8 @@ const (
 	versusGathering = 60 * time.Second
 
 	// gatherIdle is how long a member of a versus room without a server stays in it after their
-	// last query; the game polls every 2 seconds.
-	gatherIdle = 10 * time.Second
+	// last query. The game polls about every 10 seconds, and gives up on a request after 15.
+	gatherIdle = 30 * time.Second
 )
 
 // room is a room a cabinet has created, the game server that hosts it, and its members, the

@@ -545,14 +545,28 @@ func TestMaster_JoiningVersusAfterTheRoomExpired_OpensANewRoom(t *testing.T) {
 func TestMaster_VersusMemberWhoStopsPolling_LeavesTheGatheringRoom(t *testing.T) {
 	master, now := versusMaster()
 	master.Reply(lan, versusQuery("11", "3", "1"))
-	*now = now.Add(5 * time.Second)
+	*now = now.Add(20 * time.Second)
 	master.Reply(lan, versusQuery("12", "3", "3"))
-	*now = now.Add(6 * time.Second)
+	*now = now.Add(11 * time.Second)
 
 	got := master.Reply(lan, versusQuery("13", "5", "3"))
 
 	if len(got) != 1 || field(got[0], playersAt) != "Ellis" {
 		t.Fatalf("Reply() returned %d datagrams, players %q", len(got), field(got[0], playersAt))
+	}
+}
+
+func TestMaster_VersusMemberPollingEveryElevenSeconds_StaysInTheRoom(t *testing.T) {
+	master, now := versusMaster()
+	master.Reply(lan, versusQuery("11", "3", "1"))
+	*now = now.Add(9 * time.Second)
+	master.Reply(lan, versusQuery("12", "5", "1"))
+	*now = now.Add(11 * time.Second)
+
+	got := single(t, master.Reply(lan, versusQuery("13", "5", "1")))
+
+	if got[4] != 1 || field(got, playersAt) != "Boba" {
+		t.Fatalf("Reply() = %v, players %q", got[:7], field(got, playersAt))
 	}
 }
 
