@@ -213,6 +213,9 @@ func (m *Master) Reply(from netip.Addr, query Query) [][]byte {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.dropEnded()
+	if query.lobby() {
+		m.touch(query)
+	}
 
 	var found []*room
 	failure := byte(0)
@@ -274,18 +277,21 @@ func (m *Master) dropEnded() {
 	})
 }
 
-// enterLobby gives the asking player a lobby room of their own unless they are already in one,
-// and marks their rooms as seen.
-func (m *Master) enterLobby(query Query) {
-	player := query.player()
+// touch marks the lobby rooms the asking player is in as seen, and reports whether there are any.
+func (m *Master) touch(query Query) bool {
 	inRoom := false
 	for _, r := range m.rooms {
-		if slices.Contains(r.members, player) && r.rule == query.Fields["rule"] {
+		if slices.Contains(r.members, query.player()) && r.rule == query.Fields["rule"] {
 			r.lastSeen = m.now()
 			inRoom = true
 		}
 	}
-	if !inRoom {
+	return inRoom
+}
+
+// enterLobby gives the asking player a lobby room of their own unless they are already in one.
+func (m *Master) enterLobby(query Query) {
+	if !m.touch(query) {
 		m.rooms = append(m.rooms, m.newRoom(netip.AddrPort{}, query))
 	}
 }
