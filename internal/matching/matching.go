@@ -100,6 +100,13 @@ func (q Query) lobby() bool {
 	return mode == 2 || mode >= 7 && mode <= 10
 }
 
+// Values of a lobby room's permission byte, which the room panel shows as an icon.
+const (
+	permissionGathering = 0    // "gathering" (待ち合わせ中)
+	permissionAnyone    = 1    // "anyone may join" (誰でも参加OK)
+	permissionNone      = 0xff // no icon: the room has no stage yet
+)
+
 const (
 	// roomTTL is how long a room stays listed after it was created.
 	roomTTL = 10 * time.Minute
@@ -122,6 +129,7 @@ type room struct {
 	campaign   byte
 	chapter    byte
 	difficulty byte
+	permission byte
 	members    []int64
 	created    time.Time
 	lastSeen   time.Time
@@ -185,7 +193,8 @@ func NewMaster(config Config) *Master {
 // (room 2) also gives the asking player a room of their own, without a server, unless they are
 // already in one. Creating or joining a room (room 4, with the room's id) gives the room a server
 // when its owner asks, adds anyone else as a member, takes the stage from the owner's query once
-// it has one, and returns the room; it answers "room lost" when the room is gone and "no server"
+// it has one (with the owner's gathering setting, which that query carries in progress: 1 lets
+// anyone join), and returns the room; it answers "room lost" when the room is gone and "no server"
 // when no server is available. Joining someone else's room (room 1, with its id) makes the
 // asking player a member in the same way.
 //
@@ -314,6 +323,10 @@ func (m *Master) playLobbyRoom(host netip.Addr, query Query) (*room, byte) {
 		target.campaign = byte(stage)
 		target.chapter = byte(max(query.number("chapter"), 1))
 		target.difficulty = query.difficulty()
+		target.permission = permissionGathering
+		if query.number("progress") == permissionAnyone {
+			target.permission = permissionAnyone
+		}
 	}
 	return target, 0
 }
@@ -330,16 +343,17 @@ func (m *Master) host(asker netip.Addr) (netip.AddrPort, bool) {
 // gets its stage from the query; a lobby room has none until its owner picks one.
 func (m *Master) newRoom(server netip.AddrPort, query Query) *room {
 	created := &room{
-		id:       m.nextRoomID,
-		server:   server,
-		mode:     query.Fields["mode"],
-		rule:     query.Fields["rule"],
-		tenpo:    query.Fields["tenpo"],
-		machine:  query.Fields["machine"],
-		password: query.Fields["password"],
-		members:  []int64{query.player()},
-		created:  m.now(),
-		lastSeen: m.now(),
+		id:         m.nextRoomID,
+		server:     server,
+		mode:       query.Fields["mode"],
+		rule:       query.Fields["rule"],
+		tenpo:      query.Fields["tenpo"],
+		machine:    query.Fields["machine"],
+		password:   query.Fields["password"],
+		members:    []int64{query.player()},
+		created:    m.now(),
+		lastSeen:   m.now(),
+		permission: permissionNone,
 	}
 	if !query.lobby() {
 		created.campaign = byte(max(query.number("stage"), 1))
@@ -446,7 +460,7 @@ func (m *Master) appendEntry(b []byte, r *room, query Query) []byte {
 	b = appendField(b, "", 0x190)
 	b = appendField(b, strings.Join(stores, ","), 0x190)
 	b = appendField(b, "", 0x190)
-	b = append(b, 0, 0, 0, ownerIsMe, byte(me), 0)
+	b = append(b, 0, r.permission, 0, ownerIsMe, byte(me), 0)
 	b = appendField(b, r.password, 4)
 	b = append(b, make([]byte, 16)...)
 	return appendField(b, "0", 0x20)

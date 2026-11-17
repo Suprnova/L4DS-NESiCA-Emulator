@@ -248,7 +248,7 @@ func TestMaster_OpeningTheStoreLobby_ListsARoomOfTheirOwnWithoutAServer(t *testi
 	got := single(t, master.Reply(lan, storeQuery("11", "2", "1")))
 
 	status := got[statusAt : statusAt+6]
-	if len(got) != entrySize || !slices.Equal(got[7:13], make([]byte, 6)) || field(got, playersAt) != "Boba" || field(got, storesAt) != "L4DS Emulator" || !slices.Equal(status, []byte{0, 0, 0, 1, 0, 0}) || len(hosts.free) != 1 {
+	if len(got) != entrySize || !slices.Equal(got[7:13], make([]byte, 6)) || field(got, playersAt) != "Boba" || field(got, storesAt) != "L4DS Emulator" || !slices.Equal(status, []byte{0, 0xff, 0, 1, 0, 0}) || len(hosts.free) != 1 {
 		t.Fatalf("entry size %d, address %v, players %q, stores %q, status %v, servers left %d", len(got), got[7:13], field(got, playersAt), field(got, storesAt), status, len(hosts.free))
 	}
 }
@@ -271,10 +271,26 @@ func TestMaster_OwnerSendsTheChosenStage_SetsTheRoomsStage(t *testing.T) {
 	chosen := storeRoom("13", "1", "1")
 	chosen.Fields["stage"], chosen.Fields["chapter"], chosen.Fields["difficulty"] = "2", "3", "1"
 
+	chosen.Fields["progress"] = "1"
+
 	got := single(t, master.Reply(lan, chosen))
 
-	if !slices.Equal(got[7:13], []byte{127, 0, 0, 2, 0x6d, 0x74}) || !slices.Equal(got[17:20], []byte{2, 3, 1}) {
-		t.Fatalf("address %v, campaign, chapter and difficulty %v", got[7:13], got[17:20])
+	if !slices.Equal(got[7:13], []byte{127, 0, 0, 2, 0x6d, 0x74}) || !slices.Equal(got[17:20], []byte{2, 3, 1}) || got[statusAt+1] != 1 {
+		t.Fatalf("address %v, campaign, chapter and difficulty %v, permission %d", got[7:13], got[17:20], got[statusAt+1])
+	}
+}
+
+func TestMaster_OwnerChoosesGathering_ShowsTheGatheringPermission(t *testing.T) {
+	master := storeMaster()
+	master.Reply(lan, storeQuery("11", "2", "1"))
+	before := single(t, master.Reply(lan, storeRoom("12", "1", "1")))
+	chosen := storeRoom("13", "1", "1")
+	chosen.Fields["stage"], chosen.Fields["chapter"], chosen.Fields["difficulty"], chosen.Fields["progress"] = "1", "1", "1", "0"
+
+	got := single(t, master.Reply(lan, chosen))
+
+	if before[statusAt+1] != 0xff || got[statusAt+1] != 0 {
+		t.Fatalf("permission before a stage %d, after %d", before[statusAt+1], got[statusAt+1])
 	}
 }
 
@@ -291,7 +307,7 @@ func TestMaster_PlayerJoinsALobbyRoom_BecomesAMemberAndLosesTheirOwnRoom(t *test
 	listed := master.Reply(lan, storeQuery("15", "5", "3"))
 
 	status := got[statusAt : statusAt+6]
-	if field(got, playersAt) != "Boba,Ellis" || field(got, storesAt) != "L4DS Emulator,L4DS Emulator" || !slices.Equal(status, []byte{0, 0, 0, 0, 1, 0}) || len(listed) != 1 {
+	if field(got, playersAt) != "Boba,Ellis" || field(got, storesAt) != "L4DS Emulator,L4DS Emulator" || !slices.Equal(status, []byte{0, 0xff, 0, 0, 1, 0}) || len(listed) != 1 {
 		t.Fatalf("players %q, stores %q, status %v, rooms listed %d", field(got, playersAt), field(got, storesAt), status, len(listed))
 	}
 }
