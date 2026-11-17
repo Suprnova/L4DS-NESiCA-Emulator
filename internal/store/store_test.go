@@ -43,6 +43,26 @@ func TestPlayerByCard_UnknownCard_ReturnsErrNotRegistered(t *testing.T) {
 	}
 }
 
+func TestPlayer_UnknownID_ReturnsErrNoPlayer(t *testing.T) {
+	s := openStore(t)
+
+	_, err := s.Player(42)
+
+	if !errors.Is(err, store.ErrNoPlayer) {
+		t.Fatalf("error = %v, want ErrNoPlayer", err)
+	}
+}
+
+func TestRecordLogin_UnknownID_ReturnsErrNoPlayer(t *testing.T) {
+	s := openStore(t)
+
+	err := s.RecordLogin(42)
+
+	if !errors.Is(err, store.ErrNoPlayer) {
+		t.Fatalf("error = %v, want ErrNoPlayer", err)
+	}
+}
+
 func TestRegister_NewCard_CreatesThePlayer(t *testing.T) {
 	s := openStore(t)
 

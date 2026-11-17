@@ -53,6 +53,9 @@ var ErrNotRegistered = errors.New("store: card is not registered")
 // ErrAlreadyRegistered reports that a card already has a player.
 var ErrAlreadyRegistered = errors.New("store: card is already registered")
 
+// ErrNoPlayer reports that the player a lookup or update names, by id or by card, does not exist.
+var ErrNoPlayer = errors.New("store: no such player")
+
 // Player is a registered player and their progress totals. Class ids count from 1, the
 // lowest class (F5 in co-op, F in versus).
 type Player struct {
@@ -175,8 +178,14 @@ func (s *Store) Register(cardID, name string, charaID int64) (Player, error) {
 	return s.player(`card_id = ?`, cardID)
 }
 
-// Player returns the player with the given id, or sql.ErrNoRows when there is none.
-func (s *Store) Player(id int64) (Player, error) { return s.player(`id = ?`, id) }
+// Player returns the player with the given id, or ErrNoPlayer.
+func (s *Store) Player(id int64) (Player, error) {
+	player, err := s.player(`id = ?`, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Player{}, ErrNoPlayer
+	}
+	return player, err
+}
 
 // RecordResult adds a finished chapter to a player's totals, and to their cleared chapters
 // when the chapter was cleared.
@@ -199,7 +208,7 @@ func (s *Store) RecordResult(playerID int64, result Result) error {
 		return err
 	}
 	if rows, _ := outcome.RowsAffected(); rows == 0 {
-		return errors.New("store: no such player")
+		return ErrNoPlayer
 	}
 
 	if result.Cleared {
@@ -253,7 +262,7 @@ func (s *Store) updatePlayer(query string, args ...any) error {
 		return err
 	}
 	if rows, _ := outcome.RowsAffected(); rows == 0 {
-		return errors.New("store: no such player")
+		return ErrNoPlayer
 	}
 	return nil
 }
