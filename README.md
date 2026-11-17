@@ -40,9 +40,14 @@ Run the game from the client tree with the usual arcade command line, and put a 
 ```
 <client tree>\left4dead2.exe -console -arcadeIO_InitializeSkip -game left4dead2 -language japanese -windowed
 change_debug_dummyCardID <16-digit card number>
-change_debug_dummyCardID 0
 ```
 
-The first console command puts that card on the reader, the second takes it off. The installed game also works, with `-simulateNESICA <card>` in place of the console commands, but then the card stays on the reader for the whole run and the startup and attract movies never play.
+The console command puts that card on the reader for one scan: a successful read takes it off again. To scan with a key, bind it once in the console; the game saves the bind in the tree's `left4dead2\cfg\config.cfg`, so each client tree keeps its own card:
+
+```
+bind ENTER "change_debug_dummyCardID <16-digit card number>"
+```
+
+The installed game also works, with `-simulateNESICA <card>` in place of the console commands, but then the card stays on the reader for the whole run and the startup and attract movies never play.
 
 `go run ./cmd/l4ds-tree revert <tree>` restores a tree's original bytes, and `apply` patches it again. Never delete a tree with a recursive delete that follows junctions, such as Windows PowerShell 5.1's `Remove-Item -Recurse`: most of a tree is junctions to the game's folders, and their contents would go too.
