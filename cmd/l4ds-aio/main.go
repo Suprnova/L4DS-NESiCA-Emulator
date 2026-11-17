@@ -34,7 +34,7 @@ func main() {
 	path := flag.String("pipe", pipe.DefaultPath, "named pipe the game connects to")
 	configPath := flag.String("config", "", "YAML configuration file with the store, the server key and the versus and event schedule (see l4ds.example.yaml); without it the store is \"L4DS Emulator\" in Tokyo and nothing is scheduled")
 	dbPath := flag.String("db", "l4ds.db", "SQLite database holding the players")
-	gameDir := flag.String("game-dir", "", "game install folder; its level table sets player levels (all players are level 1 without it)")
+	gameDir := flag.String("game-dir", "", "game install folder; its level table sets player levels, its map table the stage list, and its versus class table the class table versus results need (without it every player is level 1 and a versus round crashes the game when it ends)")
 	masterAddr := flag.String("master", ":27010", "UDP address of the matching master")
 	gameServerAddr := flag.String("game-server", "", "UDP address to log game server queries on, such as :27015; it blocks the game's own listen server there")
 	roomServer := flag.String("room-server", "", "IPv4 address and port of a dedicated server, started by hand, that hosts every new room, such as 127.0.0.2:27020")
@@ -72,6 +72,10 @@ func main() {
 		var err error
 		if catalog.Levels, err = loadLevels(*gameDir); err != nil {
 			slog.Error("load level table", "game-dir", *gameDir, "error", err)
+			os.Exit(1)
+		}
+		if catalog.VersusClasses, err = loadVersusClasses(*gameDir); err != nil {
+			slog.Error("load versus class table", "game-dir", *gameDir, "error", err)
 			os.Exit(1)
 		}
 		if catalog.Stages, err = loadStages(*gameDir); err != nil {
@@ -243,6 +247,15 @@ func loadLevels(gameDir string) (*game.LevelTable, error) {
 	}
 	defer file.Close()
 	return game.ParseLevelTable(file)
+}
+
+func loadVersusClasses(gameDir string) ([]game.VersusClass, error) {
+	file, err := os.Open(filepath.Join(gameDir, "left4dead2", "resource", "VersusClassDataTable.txt"))
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	return game.ParseVersusClasses(file)
 }
 
 // stageNameFiles are the localization files that name the stages and chapters, in the order
