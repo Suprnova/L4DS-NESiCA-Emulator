@@ -46,8 +46,8 @@ func TestServer_Select_ReportsExperienceAndLoginsAfterTheEmptyBlocks(t *testing.
 	reply, _ := server.Select("7020392000000001")
 
 	lines := strings.Split(reply.Body, "\n")
-	if lines[53] != "222" || lines[87] != "1" {
-		t.Fatalf("experience line = %q, login_num line = %q", lines[53], lines[87])
+	if lines[29] != "222" || lines[31] != "1" || len(lines) != 35 {
+		t.Fatalf("experience line = %q, login_num line = %q, %d lines", lines[29], lines[31], len(lines))
 	}
 }
 

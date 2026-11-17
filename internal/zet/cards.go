@@ -13,13 +13,15 @@ import (
 	"l4ds-nesica-emulator/internal/wire"
 )
 
-// avatarLines is the number of lines in an avatar block: ten slots of id, resource id and
-// color index.
-const avatarLines = 30
+// emptyAvatarLines is the number of lines in an avatar block with nothing equipped: the id of
+// each of the six slots (head, tops, bottoms and the three accessories). The game reads a
+// slot's resource id, color index and replacement only when its id is not 0.
+const emptyAvatarLines = 6
 
 // Select answers a card lookup with the profile of the player registered to the card. An
 // unregistered card gets the card server's unregistered status and no profile. The avatar,
-// title and equipment blocks are empty, so the game uses its defaults.
+// skill item, title and weapon blocks are empty, so the game uses its defaults, and
+// changed_equipment is 0, so the game reads no latest equipment set.
 func (s *Server) Select(cardID string) (wire.CardReply, error) {
 	player, err := s.store.PlayerByCard(cardID)
 	if errors.Is(err, store.ErrNotRegistered) {
@@ -34,10 +36,9 @@ func (s *Server) Select(cardID string) (wire.CardReply, error) {
 		player.Zet, s.levels.Level(player.Exp), player.Score, "", "", 0, 0, 0, 0,
 		0, "", 1, "", player.CharaID,
 	}
-	lines = append(lines, slices.Repeat([]any{""}, avatarLines)...)
+	lines = append(lines, slices.Repeat([]any{0}, emptyAvatarLines)...)
 	lines = append(lines, 0, "", "", 0, player.Exp, 0)
-	lines = append(lines, slices.Repeat([]any{""}, avatarLines)...)
-	lines = append(lines, 0, 0, player.Logins, 0, 0)
+	lines = append(lines, player.Logins, 0, 0)
 
 	var body strings.Builder
 	for _, line := range lines {
