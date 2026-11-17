@@ -14,16 +14,26 @@ import (
 
 // Server is the ZET game server.
 type Server struct {
-	store  *store.Store
-	levels *game.LevelTable
-	stages []game.Stage
+	store    *store.Store
+	levels   *game.LevelTable
+	stages   []game.Stage
+	schedule Schedule
 }
 
-// NewServer returns a server that keeps its players in s, derives their levels from levels and
-// offers stages in every mode. A nil table makes every player level 1; with no stages the game
-// falls back to its own stage table.
-func NewServer(s *store.Store, levels *game.LevelTable, stages []game.Stage) *Server {
-	return &Server{store: s, levels: levels, stages: stages}
+// Catalog is what the server offers players besides their own data.
+type Catalog struct {
+	// Levels derives player levels from experience; nil makes every player level 1.
+	Levels *game.LevelTable
+	// Stages are offered in every mode; with none, the game falls back to its own stage table.
+	Stages []game.Stage
+	// Schedule holds the versus schedule and the events; without them versus and the event
+	// modes stay unavailable.
+	Schedule Schedule
+}
+
+// NewServer returns a server that keeps its players in s and offers catalog.
+func NewServer(s *store.Store, catalog Catalog) *Server {
+	return &Server{store: s, levels: catalog.Levels, stages: catalog.Stages, schedule: catalog.Schedule}
 }
 
 // Handler returns the server's HTTP handler.
@@ -40,6 +50,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /close", stub("ex_svp and zet (leftover SVP converted to ZG), reply's info lines"))
 	mux.HandleFunc("POST /svp", svp)
 	mux.HandleFunc("POST /stages", s.stageList)
+	mux.HandleFunc("POST /versus", s.versusList)
+	mux.HandleFunc("POST /event", s.eventList)
 	mux.HandleFunc("/", unanswered)
 	return mux
 }

@@ -97,7 +97,7 @@ func TestHandler_Stages_ListsEveryStageInEachKind(t *testing.T) {
 	s, _ := store.Open(":memory:")
 	t.Cleanup(func() { s.Close() })
 	stages := []game.Stage{{ID: 9, Name: "Crash Course", Chapters: []game.Chapter{{ID: 1, Name: "1: Alleys"}, {ID: 2, Name: "2: Truck Depot"}}}}
-	server := zet.NewServer(s, nil, stages)
+	server := zet.NewServer(s, zet.Catalog{Stages: stages})
 
 	got := strings.Split(postTo(server, "/stages", ""), "\n")
 

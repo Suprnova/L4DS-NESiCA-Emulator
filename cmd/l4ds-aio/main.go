@@ -18,6 +18,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"l4ds-nesica-emulator/internal/dedicated"
 	"l4ds-nesica-emulator/internal/game"
@@ -44,6 +45,7 @@ func main() {
 	dsMax := flag.Int("ds-max", 4, "most dedicated servers running at once")
 	dsSpares := flag.Int("ds-spares", 1, "dedicated servers kept ready for new rooms")
 	dsConsole := flag.Bool("ds-console", false, "show each dedicated server's console window")
+	sampleSchedule := flag.Bool("sample-schedule", false, "offer a sample versus unit and national and store events (store event id 1), to explore those modes; their games are not supported yet")
 	flag.Parse()
 
 	dsConfig := dedicated.Config{Dir: *dsDir, Max: *dsMax, Spares: *dsSpares, ShowConsoles: *dsConsole}
@@ -53,18 +55,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	var levels *game.LevelTable
-	var stages []game.Stage
+	var catalog zet.Catalog
 	if *gameDir != "" {
 		var err error
-		if levels, err = loadLevels(*gameDir); err != nil {
+		if catalog.Levels, err = loadLevels(*gameDir); err != nil {
 			slog.Error("load level table", "game-dir", *gameDir, "error", err)
 			os.Exit(1)
 		}
-		if stages, err = loadStages(*gameDir); err != nil {
+		if catalog.Stages, err = loadStages(*gameDir); err != nil {
 			slog.Error("load stages", "game-dir", *gameDir, "error", err)
 			os.Exit(1)
 		}
+	}
+	if *sampleSchedule {
+		catalog.Schedule = zet.SampleSchedule(time.Now())
 	}
 
 	players, err := store.Open(*dbPath)
@@ -73,7 +77,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer players.Close()
-	server := zet.NewServer(players, levels, stages)
+	server := zet.NewServer(players, catalog)
 
 	config := nesys.Config{
 		Store:          wire.StoreInfo{ID: 1, Name: "L4DS Emulator", Prefecture: *prefecture},

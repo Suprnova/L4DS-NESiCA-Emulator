@@ -21,7 +21,7 @@ func newServer(t *testing.T) (*zet.Server, *store.Store) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	return zet.NewServer(s, nil, nil), s
+	return zet.NewServer(s, zet.Catalog{}), s
 }
 
 func TestServer_Select_ReturnsTheStoredPlayer(t *testing.T) {
@@ -137,7 +137,7 @@ func TestServer_Select_ReportsTheLevelFromExperience(t *testing.T) {
 	levels, _ := game.ParseLevelTable(strings.NewReader(`"LevelTable" { "Lv1" { "BaseExp" "0" } "Lv2" { "BaseExp" "150" } }`))
 	s, _ := store.Open(":memory:")
 	t.Cleanup(func() { s.Close() })
-	server := zet.NewServer(s, levels, nil)
+	server := zet.NewServer(s, zet.Catalog{Levels: levels})
 	player, _ := s.Register("7020392000000001", "Survivor", 0)
 	s.RecordResult(player.ID, store.Result{Exp: 150})
 
