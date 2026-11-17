@@ -78,6 +78,19 @@ func TestHandler_Result_AddsTheChapterToThePlayersTotals(t *testing.T) {
 	}
 }
 
+func TestHandler_Result_KeepsTheClassesTheGameReports(t *testing.T) {
+	server, s := newServer(t)
+	player, _ := s.Register("7020392000000001", "Survivor", 0)
+	postTo(server, "/result", fmt.Sprintf("player_id=%d&class_point=40&coop_class_id=2&vs_class_id=1", player.ID))
+
+	postTo(server, "/result", fmt.Sprintf("player_id=%d&class_point=-15&coop_class_id=2&vs_class_id=1", player.ID))
+
+	updated, _ := s.Player(player.ID)
+	if updated.CoopClassPoint != 25 || updated.CoopClassID != 2 || updated.VSClassID != 1 {
+		t.Fatalf("player = %+v", updated)
+	}
+}
+
 func TestHandler_Login_CountsTheLogin(t *testing.T) {
 	server, s := newServer(t)
 	player, _ := s.Register("7020392000000001", "Survivor", 0)

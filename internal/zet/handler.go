@@ -53,12 +53,17 @@ func svp(w http.ResponseWriter, r *http.Request) {
 }
 
 // result adds the finished chapter to the player's totals and answers with a success header.
+// class_point is the change in the player's class points; the game modes it reports are all
+// co-op, so it goes to the co-op class.
 func (s *Server) result(w http.ResponseWriter, r *http.Request) {
 	playerID, _ := strconv.ParseInt(r.PostFormValue("player_id"), 10, 64)
 	result := store.Result{
-		Zet:   formInt(r, "zet"),
-		Exp:   formInt(r, "exp"),
-		Score: formInt(r, "TOTAL_SCORE"),
+		Zet:            formInt(r, "zet"),
+		Exp:            formInt(r, "exp"),
+		Score:          formInt(r, "TOTAL_SCORE"),
+		CoopClassPoint: formInt(r, "class_point"),
+		CoopClassID:    formInt(r, "coop_class_id"),
+		VSClassID:      formInt(r, "vs_class_id"),
 
 		StageID:   formInt(r, "stage_id"),
 		ChapterID: formInt(r, "chapter_id"),

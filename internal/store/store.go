@@ -28,6 +28,10 @@ var migrations = []string{
 		chapter_id INTEGER NOT NULL,
 		PRIMARY KEY (player_id, stage_id, chapter_id)
 	)`,
+	`ALTER TABLE players ADD COLUMN coop_class_id INTEGER NOT NULL DEFAULT 1`,
+	`ALTER TABLE players ADD COLUMN coop_class_point INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE players ADD COLUMN vs_class_id INTEGER NOT NULL DEFAULT 1`,
+	`ALTER TABLE players ADD COLUMN vs_class_point INTEGER NOT NULL DEFAULT 0`,
 }
 
 // ErrNotRegistered reports that no player is registered to a card.
@@ -36,26 +40,36 @@ var ErrNotRegistered = errors.New("store: card is not registered")
 // ErrAlreadyRegistered reports that a card already has a player.
 var ErrAlreadyRegistered = errors.New("store: card is already registered")
 
-// Player is a registered player and their progress totals.
+// Player is a registered player and their progress totals. Class ids count from 1, the
+// lowest class (F5 in co-op, F in versus).
 type Player struct {
-	ID      int64
-	CardID  string
-	Name    string
-	Zet     int64
-	Exp     int64
-	Score   int64
-	Logins  int64
-	CharaID int64
+	ID             int64
+	CardID         string
+	Name           string
+	Zet            int64
+	Exp            int64
+	Score          int64
+	Logins         int64
+	CharaID        int64
+	CoopClassID    int64
+	CoopClassPoint int64
+	VSClassID      int64
+	VSClassPoint   int64
 }
 
-// Result is what a finished chapter adds to a player's totals.
+// Result is what a finished chapter adds to a player's totals. The game computes the classes
+// itself: CoopClassID and VSClassID are the player's classes after the chapter (0 keeps the
+// stored class), and CoopClassPoint is the change in co-op class points, which may be negative.
 type Result struct {
-	Zet       int64
-	Exp       int64
-	Score     int64
-	StageID   int64
-	ChapterID int64
-	Cleared   bool
+	Zet            int64
+	Exp            int64
+	Score          int64
+	CoopClassPoint int64
+	CoopClassID    int64
+	VSClassID      int64
+	StageID        int64
+	ChapterID      int64
+	Cleared        bool
 }
 
 // Clear is a chapter a player has cleared.
@@ -138,8 +152,12 @@ func (s *Store) RecordResult(playerID int64, result Result) error {
 	}
 	defer tx.Rollback()
 
-	outcome, err := tx.Exec(`UPDATE players SET zet = zet + ?, exp = exp + ?, score = score + ? WHERE id = ?`,
-		result.Zet, result.Exp, result.Score, playerID)
+	outcome, err := tx.Exec(`UPDATE players SET zet = zet + ?, exp = exp + ?, score = score + ?,
+		coop_class_point = coop_class_point + ?,
+		coop_class_id = COALESCE(NULLIF(?, 0), coop_class_id),
+		vs_class_id = COALESCE(NULLIF(?, 0), vs_class_id)
+		WHERE id = ?`,
+		result.Zet, result.Exp, result.Score, result.CoopClassPoint, result.CoopClassID, result.VSClassID, playerID)
 	if err != nil {
 		return err
 	}
@@ -193,7 +211,9 @@ func (s *Store) updatePlayer(query string, args ...any) error {
 
 func (s *Store) player(where string, arg any) (Player, error) {
 	var player Player
-	err := s.db.QueryRow(`SELECT id, card_id, name, zet, exp, score, logins, chara_id FROM players WHERE `+where, arg).
-		Scan(&player.ID, &player.CardID, &player.Name, &player.Zet, &player.Exp, &player.Score, &player.Logins, &player.CharaID)
+	err := s.db.QueryRow(`SELECT id, card_id, name, zet, exp, score, logins, chara_id,
+		coop_class_id, coop_class_point, vs_class_id, vs_class_point FROM players WHERE `+where, arg).
+		Scan(&player.ID, &player.CardID, &player.Name, &player.Zet, &player.Exp, &player.Score, &player.Logins, &player.CharaID,
+			&player.CoopClassID, &player.CoopClassPoint, &player.VSClassID, &player.VSClassPoint)
 	return player, err
 }

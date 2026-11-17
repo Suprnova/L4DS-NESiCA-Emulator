@@ -77,6 +77,29 @@ func TestRecordResult_AddsToTheTotals(t *testing.T) {
 	}
 }
 
+func TestRegister_NewPlayer_StartsInTheLowestClasses(t *testing.T) {
+	s := openStore(t)
+
+	player := register(t, s)
+
+	if player.CoopClassID != 1 || player.VSClassID != 1 || player.CoopClassPoint != 0 || player.VSClassPoint != 0 {
+		t.Fatalf("player = %+v", player)
+	}
+}
+
+func TestRecordResult_NoClasses_KeepsTheStoredClasses(t *testing.T) {
+	s := openStore(t)
+	player := register(t, s)
+	s.RecordResult(player.ID, store.Result{CoopClassID: 4, VSClassID: 2})
+
+	s.RecordResult(player.ID, store.Result{Zet: 10})
+
+	got, _ := s.Player(player.ID)
+	if got.CoopClassID != 4 || got.VSClassID != 2 {
+		t.Fatalf("player = %+v", got)
+	}
+}
+
 func TestRecordResult_UnknownPlayer_ReturnsAnError(t *testing.T) {
 	s := openStore(t)
 
