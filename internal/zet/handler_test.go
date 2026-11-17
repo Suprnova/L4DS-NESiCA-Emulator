@@ -93,6 +93,18 @@ func TestHandler_Result_KeepsTheClassesTheGameReports(t *testing.T) {
 	}
 }
 
+func TestHandler_VersusResult_AddsToTheVersusClassPoints(t *testing.T) {
+	server, s := newServer(t)
+	player, _ := s.Register("7020392000000001", "Survivor", 0)
+
+	postTo(server, "/result", fmt.Sprintf("player_id=%d&game_mode=7&class_point=30&coop_class_id=1&vs_class_id=2", player.ID))
+
+	updated, _ := s.Player(player.ID)
+	if updated.VSClassPoint != 30 || updated.CoopClassPoint != 0 || updated.VSClassID != 2 {
+		t.Fatalf("player = %+v", updated)
+	}
+}
+
 func TestHandler_Stages_ListsEveryStageInEachKind(t *testing.T) {
 	s, _ := store.Open(":memory:")
 	t.Cleanup(func() { s.Close() })

@@ -111,8 +111,8 @@ func svp(w http.ResponseWriter, r *http.Request) {
 }
 
 // result adds the finished chapter to the player's totals and answers with a success header.
-// class_point is the change in the player's class points; the game modes it reports are all
-// co-op, so it goes to the co-op class. A guest's result is not kept.
+// class_point is the change in the player's class points: versus points when game_mode, the
+// matching mode, is a versus mode (7 to 10), co-op points otherwise. A guest's result is not kept.
 func (s *Server) result(w http.ResponseWriter, r *http.Request) {
 	defer w.Write([]byte(successHeader))
 	playerID := formInt(r, "player_id")
@@ -121,16 +121,20 @@ func (s *Server) result(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result := store.Result{
-		Zet:            formInt(r, "zet"),
-		Exp:            formInt(r, "exp"),
-		Score:          formInt(r, "TOTAL_SCORE"),
-		CoopClassPoint: formInt(r, "class_point"),
-		CoopClassID:    formInt(r, "coop_class_id"),
-		VSClassID:      formInt(r, "vs_class_id"),
+		Zet:         formInt(r, "zet"),
+		Exp:         formInt(r, "exp"),
+		Score:       formInt(r, "TOTAL_SCORE"),
+		CoopClassID: formInt(r, "coop_class_id"),
+		VSClassID:   formInt(r, "vs_class_id"),
 
 		StageID:   formInt(r, "stage_id"),
 		ChapterID: formInt(r, "chapter_id"),
 		Cleared:   formInt(r, "clear_flag") == 1,
+	}
+	if mode := formInt(r, "game_mode"); mode >= 7 && mode <= 10 {
+		result.VSClassPoint = formInt(r, "class_point")
+	} else {
+		result.CoopClassPoint = formInt(r, "class_point")
 	}
 
 	if err := s.store.RecordResult(playerID, result); err != nil {

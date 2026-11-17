@@ -86,12 +86,14 @@ var DefaultSettings = Settings{MasterVolume: 5, BGMVolume: 5, MouseSensitivity: 
 
 // Result is what a finished chapter adds to a player's totals. The game computes the classes
 // itself: CoopClassID and VSClassID are the player's classes after the chapter (0 keeps the
-// stored class), and CoopClassPoint is the change in co-op class points, which may be negative.
+// stored class), and CoopClassPoint and VSClassPoint are the changes in co-op and versus class
+// points, which may be negative.
 type Result struct {
 	Zet            int64
 	Exp            int64
 	Score          int64
 	CoopClassPoint int64
+	VSClassPoint   int64
 	CoopClassID    int64
 	VSClassID      int64
 	StageID        int64
@@ -180,11 +182,11 @@ func (s *Store) RecordResult(playerID int64, result Result) error {
 	defer tx.Rollback()
 
 	outcome, err := tx.Exec(`UPDATE players SET zet = zet + ?, exp = exp + ?, score = score + ?,
-		coop_class_point = coop_class_point + ?,
+		coop_class_point = coop_class_point + ?, vs_class_point = vs_class_point + ?,
 		coop_class_id = COALESCE(NULLIF(?, 0), coop_class_id),
 		vs_class_id = COALESCE(NULLIF(?, 0), vs_class_id)
 		WHERE id = ?`,
-		result.Zet, result.Exp, result.Score, result.CoopClassPoint, result.CoopClassID, result.VSClassID, playerID)
+		result.Zet, result.Exp, result.Score, result.CoopClassPoint, result.VSClassPoint, result.CoopClassID, result.VSClassID, playerID)
 	if err != nil {
 		return err
 	}
