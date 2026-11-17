@@ -235,32 +235,74 @@ func storeMaster() *matching.Master {
 	})
 }
 
-func TestMaster_StoreNewRoom_ReturnsTheLongEntryWithTheOwner(t *testing.T) {
-	master := storeMaster()
+func storeRoom(sequence, player, roomID string) matching.Query {
+	query := storeQuery(sequence, "4", player)
+	query.Fields["room_id"] = roomID
+	return query
+}
+
+func TestMaster_OpeningTheStoreLobby_ListsARoomOfTheirOwnWithoutAServer(t *testing.T) {
+	hosts := servers(27020)
+	master := matching.NewMaster(matching.Config{Hosts: hosts, PlayerName: func(int64) string { return "Boba" }, StoreName: "L4DS Emulator"})
 
 	got := single(t, master.Reply(lan, storeQuery("11", "2", "1")))
 
 	status := got[statusAt : statusAt+6]
-	if len(got) != entrySize || field(got, playersAt) != "Boba" || field(got, storesAt) != "L4DS Emulator" || !slices.Equal(status, []byte{0, 0, 0, 1, 0, 0}) {
-		t.Fatalf("entry size %d, players %q, stores %q, status %v", len(got), field(got, playersAt), field(got, storesAt), status)
+	if len(got) != entrySize || !slices.Equal(got[7:13], make([]byte, 6)) || field(got, playersAt) != "Boba" || field(got, storesAt) != "L4DS Emulator" || !slices.Equal(status, []byte{0, 0, 0, 1, 0, 0}) || len(hosts.free) != 1 {
+		t.Fatalf("entry size %d, address %v, players %q, stores %q, status %v, servers left %d", len(got), got[7:13], field(got, playersAt), field(got, storesAt), status, len(hosts.free))
 	}
 }
 
-func TestMaster_StoreEnterRoom_AddsThePlayerAsAMember(t *testing.T) {
+func TestMaster_OwnerCreatesTheirLobbyRoom_GivesItAServerButNoStage(t *testing.T) {
 	master := storeMaster()
 	master.Reply(lan, storeQuery("11", "2", "1"))
-	enter := storeQuery("12", "3", "3")
-	enter.Fields["room_id"] = "1"
 
-	got := single(t, master.Reply(lan, enter))
+	got := single(t, master.Reply(lan, storeRoom("12", "1", "1")))
 
-	status := got[statusAt : statusAt+6]
-	if field(got, playersAt) != "Boba,Ellis" || field(got, storesAt) != "L4DS Emulator,L4DS Emulator" || !slices.Equal(status, []byte{0, 0, 0, 0, 1, 0}) {
-		t.Fatalf("players %q, stores %q, status %v", field(got, playersAt), field(got, storesAt), status)
+	if !slices.Equal(got[7:13], []byte{127, 0, 0, 2, 0x6d, 0x74}) || !slices.Equal(got[17:20], []byte{0, 0, 0}) {
+		t.Fatalf("address %v, campaign, chapter and difficulty %v", got[7:13], got[17:20])
 	}
 }
 
-func TestMaster_StoreSearch_ListsEveryRoomInTheStoreNewestFirst(t *testing.T) {
+func TestMaster_OwnerSendsTheChosenStage_SetsTheRoomsStage(t *testing.T) {
+	master := storeMaster()
+	master.Reply(lan, storeQuery("11", "2", "1"))
+	master.Reply(lan, storeRoom("12", "1", "1"))
+	chosen := storeRoom("13", "1", "1")
+	chosen.Fields["stage"], chosen.Fields["chapter"], chosen.Fields["difficulty"] = "2", "3", "1"
+
+	got := single(t, master.Reply(lan, chosen))
+
+	if !slices.Equal(got[7:13], []byte{127, 0, 0, 2, 0x6d, 0x74}) || !slices.Equal(got[17:20], []byte{2, 3, 2}) {
+		t.Fatalf("address %v, campaign, chapter and difficulty %v", got[7:13], got[17:20])
+	}
+}
+
+func TestMaster_PlayerJoinsALobbyRoom_BecomesAMemberAndLosesTheirOwnRoom(t *testing.T) {
+	master := storeMaster()
+	master.Reply(lan, storeQuery("11", "2", "1"))
+	master.Reply(lan, storeQuery("12", "2", "3"))
+	master.Reply(lan, storeRoom("13", "1", "1"))
+
+	got := single(t, master.Reply(lan, storeRoom("14", "3", "1")))
+	listed := master.Reply(lan, storeQuery("15", "5", "3"))
+
+	status := got[statusAt : statusAt+6]
+	if field(got, playersAt) != "Boba,Ellis" || field(got, storesAt) != "L4DS Emulator,L4DS Emulator" || !slices.Equal(status, []byte{0, 0, 0, 0, 1, 0}) || len(listed) != 1 {
+		t.Fatalf("players %q, stores %q, status %v, rooms listed %d", field(got, playersAt), field(got, storesAt), status, len(listed))
+	}
+}
+
+func TestMaster_JoiningALobbyRoomThatIsGone_AnswersRoomLost(t *testing.T) {
+	got := single(t, storeMaster().Reply(lan, storeRoom("11", "3", "7")))
+
+	want := []byte{0, 0, 0, 11, 0x7d}
+	if !slices.Equal(got, want) {
+		t.Fatalf("Reply() = %v, want %v", got, want)
+	}
+}
+
+func TestMaster_StoreLobby_ListsTheStoresRoomsNewestFirst(t *testing.T) {
 	master := storeMaster()
 	master.Reply(lan, storeQuery("11", "2", "1"))
 	master.Reply(lan, storeQuery("12", "2", "3"))
@@ -268,9 +310,18 @@ func TestMaster_StoreSearch_ListsEveryRoomInTheStoreNewestFirst(t *testing.T) {
 	otherStore.Fields["tenpo"] = "2"
 	master.Reply(lan, otherStore)
 
-	got := master.Reply(lan, storeQuery("14", "5", "5"))
+	got := master.Reply(lan, storeQuery("14", "5", "1"))
 
 	if len(got) != 2 || got[0][5] != 2 || got[0][6] != 0 || got[0][16] != 2 || got[1][6] != 1 || got[1][16] != 1 {
-		t.Fatalf("Reply() returned %d datagrams with count, index and room id %v", len(got), [][]byte{got[0][5:7], got[0][16:17]})
+		t.Fatalf("Reply() returned %d datagrams", len(got))
+	}
+}
+
+func TestMaster_RefreshingAnEmptyStoreLobby_AnswersAnEmptySuccess(t *testing.T) {
+	got := single(t, storeMaster().Reply(lan, storeQuery("11", "5", "1")))
+
+	want := []byte{0, 0, 0, 11, 1, 0, 0}
+	if !slices.Equal(got, want) {
+		t.Fatalf("Reply() = %v, want %v", got, want)
 	}
 }

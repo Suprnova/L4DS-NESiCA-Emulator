@@ -26,10 +26,14 @@ const (
 	errRoomLost  = 0x7d
 	errEmptyList = 0x7e
 
-	// Values of the room field. A search for a room to join that finds one is followed by a
-	// request to enter it, with the same fields.
+	// Values of the room field. For national rooms, a search for a room to join that finds one is
+	// followed by a request to enter it, with the same fields. In a store or clan lobby, opening
+	// the lobby sends lobbyEntry, refreshing the list sends joinSearch, and creating or joining a
+	// room sends lobbyRoom with the room's id.
 	newRoom    = "2"
+	lobbyEntry = "2"
 	enterRoom  = "3"
+	lobbyRoom  = "4"
 	joinSearch = "5"
 
 	// Values of the rule field.
@@ -90,11 +94,17 @@ func (q Query) lobby() bool {
 	return mode == 2 || mode >= 7 && mode <= 10
 }
 
-// roomTTL is how long a room stays listed after it was created.
-const roomTTL = 10 * time.Minute
+const (
+	// roomTTL is how long a room stays listed after it was created.
+	roomTTL = 10 * time.Minute
+
+	// lobbyIdle is how long a lobby room without a server stays listed after its last query
+	// from a member; the lobby's own timer is 180 seconds.
+	lobbyIdle = 210 * time.Second
+)
 
 // room is a room a cabinet has created, the game server that hosts it, and its members, the
-// first of whom owns it.
+// first of whom owns it. A lobby room gets its server when its owner creates it for play.
 type room struct {
 	id         uint32
 	server     netip.AddrPort
@@ -108,6 +118,7 @@ type room struct {
 	difficulty byte
 	members    []int64
 	created    time.Time
+	lastSeen   time.Time
 }
 
 // Hosts provides the game servers that host new rooms.
@@ -157,14 +168,21 @@ func NewMaster(config Config) *Master {
 // request, so each datagram is the big-endian sequence number, the error code, the number of
 // entries, the index of this entry and the entry itself.
 //
-// A query for a new room (room 2) creates a room owned by the asking player and returns it, or
-// answers "no server" when no server is available; a resent query returns the room the player
-// already owns. A search (room 5) returns the rooms that fit the query, or an empty list: for
-// national rooms the newest one with the same mode, rule and difficulty, for store and clan
-// rooms every one with the same mode and rule (and for store rooms the same store and matching
-// group). A request to enter a room (room 3) adds the asking player to the room with the query's
-// room_id, or to the room a search would find, and returns it; it answers "room lost" when the
-// room is gone. Other room values get no answer.
+// National queries: a query for a new room (room 2) creates a room owned by the asking player
+// and returns it, or answers "no server" when no server is available; a resent query returns the
+// room the player already owns. A search (room 5) returns the newest room with the same mode,
+// rule and difficulty, or an empty list. A request to enter a room (room 3) adds the asking
+// player to the room a search would find and returns it, or answers "room lost".
+//
+// Store and clan lobby queries (see [Query.lobby]) list every lobby room with the same mode and
+// rule, and for store rooms the same store and matching group, newest first. Opening the lobby
+// (room 2) also gives the asking player a room of their own, without a server, unless they are
+// already in one. Creating or joining a room (room 4, with the room's id) gives the room a server
+// when its owner asks, adds anyone else as a member, takes the stage from the owner's query once
+// it has one, and returns the room; it answers "room lost" when the room is gone and "no server"
+// when no server is available.
+//
+// Other room values get no answer.
 func (m *Master) Reply(from netip.Addr, query Query) [][]byte {
 	if query.Type != listQuery {
 		return nil
@@ -181,26 +199,41 @@ func (m *Master) Reply(from netip.Addr, query Query) [][]byte {
 	m.dropEnded()
 
 	var found []*room
-	switch query.Fields["room"] {
-	case joinSearch:
-		if found = m.search(query); len(found) == 0 {
-			return [][]byte{append(header, errEmptyList)}
+	failure := byte(0)
+	switch request := query.Fields["room"]; {
+	case query.lobby() && request == lobbyEntry:
+		m.enterLobby(query)
+		found = m.search(query)
+	case request == joinSearch:
+		if found = m.search(query); len(found) == 0 && !query.lobby() {
+			failure = errEmptyList
 		}
-	case enterRoom:
-		r := m.enter(query)
-		if r == nil {
-			return [][]byte{append(header, errRoomLost)}
+	case query.lobby() && request == lobbyRoom:
+		var r *room
+		if r, failure = m.playLobbyRoom(from.Unmap(), query); r != nil {
+			found = []*room{r}
 		}
-		found = []*room{r}
-	case newRoom:
-		r := m.create(from.Unmap(), query)
-		if r == nil {
-			return [][]byte{append(header, errNoServer)}
+	case !query.lobby() && request == enterRoom:
+		if r := m.enter(query); r != nil {
+			found = []*room{r}
+		} else {
+			failure = errRoomLost
 		}
-		found = []*room{r}
+	case !query.lobby() && request == newRoom:
+		if r := m.create(from.Unmap(), query); r != nil {
+			found = []*room{r}
+		} else {
+			failure = errNoServer
+		}
 	default:
-		slog.Warn("unknown matching room request", "room", query.Fields["room"])
+		slog.Warn("unknown matching room request", "room", request, "rule", query.Fields["rule"])
 		return nil
+	}
+	if failure != 0 {
+		return [][]byte{append(header, failure)}
+	}
+	if len(found) == 0 {
+		return [][]byte{append(header, errOK, 0, 0)}
 	}
 
 	found = found[:min(len(found), 255)]
@@ -213,9 +246,101 @@ func (m *Master) Reply(from netip.Addr, query Query) [][]byte {
 }
 
 func (m *Master) dropEnded() {
+	now := m.now()
 	m.rooms = slices.DeleteFunc(m.rooms, func(r *room) bool {
-		return m.now().Sub(r.created) > roomTTL || m.config.Hosts != nil && !m.config.Hosts.Hosting(r.server)
+		if now.Sub(r.created) > roomTTL {
+			return true
+		}
+		if !r.server.IsValid() {
+			return now.Sub(r.lastSeen) > lobbyIdle
+		}
+		return m.config.Hosts != nil && !m.config.Hosts.Hosting(r.server)
 	})
+}
+
+// enterLobby gives the asking player a lobby room of their own unless they are already in one,
+// and marks their rooms as seen.
+func (m *Master) enterLobby(query Query) {
+	player := query.player()
+	inRoom := false
+	for _, r := range m.rooms {
+		if slices.Contains(r.members, player) && r.rule == query.Fields["rule"] {
+			r.lastSeen = m.now()
+			inRoom = true
+		}
+	}
+	if !inRoom {
+		m.rooms = append(m.rooms, m.newRoom(netip.AddrPort{}, query))
+	}
+}
+
+// playLobbyRoom handles a request to create or join the lobby room with the query's room_id: the
+// owner's request gives it a server and its stage, anyone else's makes them a member and drops
+// the empty lobby room of their own. It returns the room, or the failure code to answer with.
+func (m *Master) playLobbyRoom(host netip.Addr, query Query) (*room, byte) {
+	id, _ := strconv.ParseUint(query.Fields["room_id"], 10, 32)
+	i := slices.IndexFunc(m.rooms, func(r *room) bool { return uint64(r.id) == id })
+	if i < 0 {
+		return nil, errRoomLost
+	}
+	target, player := m.rooms[i], query.player()
+	target.lastSeen = m.now()
+
+	if target.members[0] != player {
+		if !slices.Contains(target.members, player) {
+			target.members = append(target.members, player)
+			m.rooms = slices.DeleteFunc(m.rooms, func(r *room) bool {
+				return r != target && len(r.members) == 1 && r.members[0] == player && !r.server.IsValid()
+			})
+		}
+		return target, 0
+	}
+
+	if !target.server.IsValid() {
+		server, ok := m.host(host)
+		if !ok {
+			return nil, errNoServer
+		}
+		target.server = server
+	}
+	if stage := query.number("stage"); stage > 0 {
+		target.campaign = byte(stage)
+		target.chapter = byte(max(query.number("chapter"), 1))
+		target.difficulty = byte(query.number("difficulty") + 1)
+	}
+	return target, 0
+}
+
+// host returns a server for a new room: one from Hosts, or the asking machine's listen server.
+func (m *Master) host(asker netip.Addr) (netip.AddrPort, bool) {
+	if m.config.Hosts == nil {
+		return netip.AddrPortFrom(asker, gamePort), true
+	}
+	return m.config.Hosts.Host()
+}
+
+// newRoom returns a room owned by the asking player with the query's settings. A national room
+// gets its stage from the query; a lobby room has none until its owner picks one.
+func (m *Master) newRoom(server netip.AddrPort, query Query) *room {
+	created := &room{
+		id:       m.nextRoomID,
+		server:   server,
+		mode:     query.Fields["mode"],
+		rule:     query.Fields["rule"],
+		tenpo:    query.Fields["tenpo"],
+		machine:  query.Fields["machine"],
+		password: query.Fields["password"],
+		members:  []int64{query.player()},
+		created:  m.now(),
+		lastSeen: m.now(),
+	}
+	if !query.lobby() {
+		created.campaign = byte(max(query.number("stage"), 1))
+		created.chapter = byte(max(query.number("chapter"), 1))
+		created.difficulty = byte(query.number("difficulty") + 1)
+	}
+	m.nextRoomID++
+	return created
 }
 
 func (m *Master) create(host netip.Addr, query Query) *room {
@@ -228,28 +353,11 @@ func (m *Master) create(host netip.Addr, query Query) *room {
 		}
 	}
 
-	server := netip.AddrPortFrom(host, gamePort)
-	if m.config.Hosts != nil {
-		var ok bool
-		if server, ok = m.config.Hosts.Host(); !ok {
-			return nil
-		}
+	server, ok := m.host(host)
+	if !ok {
+		return nil
 	}
-	created := &room{
-		id:         m.nextRoomID,
-		server:     server,
-		mode:       query.Fields["mode"],
-		rule:       query.Fields["rule"],
-		tenpo:      query.Fields["tenpo"],
-		machine:    query.Fields["machine"],
-		password:   query.Fields["password"],
-		campaign:   byte(max(query.number("stage"), 1)),
-		chapter:    byte(max(query.number("chapter"), 1)),
-		difficulty: byte(query.number("difficulty") + 1),
-		members:    []int64{player},
-		created:    m.now(),
-	}
-	m.nextRoomID++
+	created := m.newRoom(server, query)
 	m.rooms = append(m.rooms, created)
 	return created
 }
@@ -296,8 +404,12 @@ func (m *Master) enter(query Query) *room {
 // member index and the owner's), the password, two eight-byte arrays (class ids and numbers) and
 // an expiry date. Fields with unknown meaning are zero or empty.
 func (m *Master) appendEntry(b []byte, r *room, query Query) []byte {
-	b = append(b, r.server.Addr().AsSlice()...)
-	b = binary.BigEndian.AppendUint16(b, r.server.Port()+advertisedPortOffset)
+	if r.server.IsValid() {
+		b = append(b, r.server.Addr().AsSlice()...)
+		b = binary.BigEndian.AppendUint16(b, r.server.Port()+advertisedPortOffset)
+	} else {
+		b = append(b, 0, 0, 0, 0, 0, 0)
+	}
 	b = binary.BigEndian.AppendUint32(b, r.id)
 	b = append(b, r.campaign, r.chapter, r.difficulty)
 	if !query.lobby() {
