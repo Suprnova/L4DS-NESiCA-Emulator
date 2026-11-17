@@ -48,7 +48,7 @@ func main() {
 	dsMax := flag.Int("ds-max", 4, "most dedicated servers running at once")
 	dsSpares := flag.Int("ds-spares", 1, "dedicated servers kept ready for new rooms")
 	dsConsole := flag.Bool("ds-console", false, "show each dedicated server's console window")
-	sampleSchedule := flag.Bool("sample-schedule", false, "offer a sample versus unit and national and store events (store event id 1), to explore those modes; their games are not supported yet")
+	sampleSchedule := flag.Bool("sample-schedule", false, "offer a sample versus unit and national and store events (store event id 1), to try those modes; their results and prizes are not supported yet")
 	flag.Parse()
 
 	dsConfig := dedicated.Config{Dir: *dsDir, Max: *dsMax, Spares: *dsSpares, ShowConsoles: *dsConsole}
