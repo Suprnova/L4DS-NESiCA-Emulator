@@ -60,8 +60,7 @@ func startServer(config Config, job windows.Handle, port uint16, password string
 	cmd := exec.Command(filepath.Join(config.Dir, "srcds.exe"),
 		"-console", "-game", "left4dead2", "-basedir", config.Dir, "-insecure",
 		"+ip", config.IP.String(), "-port", strconv.Itoa(int(port)),
-		"+sv_lan", "1", "+sv_allow_lobby_connect_only", "0",
-		"+rcon_password", password, "+map", "c1m1_hotel")
+		"+sv_lan", "1", "+rcon_password", password, "+map", "c1m1_hotel")
 	cmd.Dir = config.Dir
 	cmd.Env = append(os.Environ(), "L4DS_DIR="+config.Dir)
 	if !config.ShowConsoles {
