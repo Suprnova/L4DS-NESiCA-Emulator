@@ -93,6 +93,26 @@ func TestHandler_Result_KeepsTheClassesTheGameReports(t *testing.T) {
 	}
 }
 
+func TestHandler_ClassTable_ListsOnlyTheVersusClasses(t *testing.T) {
+	s, _ := store.Open(":memory:")
+	t.Cleanup(func() { s.Close() })
+	classes := []game.VersusClass{
+		{Name: "F", BaseCP: 0, BonusCP: 30, Scores: [5]int{2000, 1500, 1000, 500, 0}},
+		{Name: "E", BaseCP: 400, BonusCP: 25, Scores: [5]int{2000, 1500, 1000, 500, 0}},
+	}
+	server := zet.NewServer(s, zet.Catalog{VersusClasses: classes})
+
+	got := postTo(server, "/class_table", "t")
+
+	want := "1\n1\n0\n" + "0\n" + "0\n" + "2\n" +
+		"1\nF\n0\n30\n5\n2000\n1500\n1000\n500\n0\n" +
+		"2\nE\n400\n25\n5\n2000\n1500\n1000\n500\n0\n" +
+		"0\n"
+	if got != want {
+		t.Fatalf("body = %q, want %q", got, want)
+	}
+}
+
 func TestHandler_Leave_TellsWhoLeftWhichRoom(t *testing.T) {
 	s, _ := store.Open(":memory:")
 	t.Cleanup(func() { s.Close() })

@@ -17,6 +17,7 @@ type Server struct {
 	store     *store.Store
 	levels    *game.LevelTable
 	stages    []game.Stage
+	classes   []game.VersusClass
 	schedule  Schedule
 	storeName string
 	leave     func(playerID int64, roomID uint32)
@@ -28,6 +29,9 @@ type Catalog struct {
 	Levels *game.LevelTable
 	// Stages are offered in every mode; with none, the game falls back to its own stage table.
 	Stages []game.Stage
+	// VersusClasses are sent as the class table's versus classes. The game needs them to record
+	// a versus round's class points: without them it crashes at the end of the round.
+	VersusClasses []game.VersusClass
 	// Schedule holds the versus schedule and the events; without them versus and the event
 	// modes stay unavailable.
 	Schedule Schedule
@@ -39,7 +43,7 @@ type Catalog struct {
 
 // NewServer returns a server that keeps its players in s and offers catalog.
 func NewServer(s *store.Store, catalog Catalog) *Server {
-	return &Server{store: s, levels: catalog.Levels, stages: catalog.Stages, schedule: catalog.Schedule, storeName: catalog.StoreName, leave: catalog.Leave}
+	return &Server{store: s, levels: catalog.Levels, stages: catalog.Stages, classes: catalog.VersusClasses, schedule: catalog.Schedule, storeName: catalog.StoreName, leave: catalog.Leave}
 }
 
 // Handler returns the server's HTTP handler.
@@ -58,6 +62,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /stages", s.stageList)
 	mux.HandleFunc("POST /versus", s.versusList)
 	mux.HandleFunc("POST /event", s.eventList)
+	mux.HandleFunc("POST /class_table", s.classTable)
 	mux.HandleFunc("POST /select", stub("matching room choice: player_id, room_id"))
 	mux.HandleFunc("POST /leave", s.leaveRoom)
 	mux.HandleFunc("/", unanswered)
