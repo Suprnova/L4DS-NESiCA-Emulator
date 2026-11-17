@@ -144,14 +144,29 @@ func migrate(db *sql.DB) error {
 	}
 
 	for i := applied; i < len(migrations); i++ {
-		if _, err := db.Exec(migrations[i]); err != nil {
-			return err
-		}
-		if _, err := db.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, i+1)); err != nil {
-			return err
+		if err := applyMigration(db, i); err != nil {
+			return fmt.Errorf("store: migration %d: %w", i+1, err)
 		}
 	}
 	return nil
+}
+
+// applyMigration applies migration i and records it in one transaction, so a failure leaves
+// neither the change nor the new version behind.
+func applyMigration(db *sql.DB, i int) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(migrations[i]); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, i+1)); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // Close closes the database.
