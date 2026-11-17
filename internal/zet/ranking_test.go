@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"l4ds-nesica-emulator/internal/store"
-	"l4ds-nesica-emulator/internal/zet"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/store"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/zet"
 )
 
 func rankingServer(t *testing.T) (*zet.Server, *store.Store) {

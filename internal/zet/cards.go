@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
-	"l4ds-nesica-emulator/internal/store"
-	"l4ds-nesica-emulator/internal/wire"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/store"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/wire"
 )
 
 // emptyAvatarLines is the number of lines in an avatar block with nothing equipped: the id of

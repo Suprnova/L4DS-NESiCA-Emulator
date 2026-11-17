@@ -16,7 +16,7 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"l4ds-nesica-emulator/internal/rcon"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/rcon"
 )
 
 // NewPool returns a pool that runs config.Dir's srcds.exe. The stub passes its arguments to the

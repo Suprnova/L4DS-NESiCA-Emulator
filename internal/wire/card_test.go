@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"l4ds-nesica-emulator/internal/wire"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/wire"
 )
 
 func TestParseCardSelectRequest_ValidPayload_ReadsCardAndData(t *testing.T) {

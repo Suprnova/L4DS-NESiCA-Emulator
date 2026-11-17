@@ -24,7 +24,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"l4ds-nesica-emulator/internal/gametree"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/gametree"
 )
 
 func main() {
@@ -95,7 +95,7 @@ func build(args []string) error {
 // buildStub builds cmd/srcds-stub into the tree as srcds.exe: a 32-bit GUI program, like the
 // real srcds.exe.
 func buildStub(tree string) error {
-	cmd := exec.Command("go", "build", "-ldflags=-H=windowsgui", "-o", filepath.Join(tree, "srcds.exe"), "l4ds-nesica-emulator/cmd/srcds-stub")
+	cmd := exec.Command("go", "build", "-ldflags=-H=windowsgui", "-o", filepath.Join(tree, "srcds.exe"), "github.com/Suprnova/L4DS-NESiCA-Emulator/cmd/srcds-stub")
 	cmd.Env = append(os.Environ(), "GOOS=windows", "GOARCH=386")
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {

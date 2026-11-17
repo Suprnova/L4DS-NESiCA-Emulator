@@ -12,7 +12,7 @@ import (
 
 	"go.yaml.in/yaml/v4"
 
-	"l4ds-nesica-emulator/internal/zet"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/zet"
 )
 
 // Config is the server's configuration file.

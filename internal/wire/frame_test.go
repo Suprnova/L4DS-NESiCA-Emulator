@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"l4ds-nesica-emulator/internal/wire"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/wire"
 )
 
 func TestEncode_FrameWithoutPayload_IsHeaderOnly(t *testing.T) {

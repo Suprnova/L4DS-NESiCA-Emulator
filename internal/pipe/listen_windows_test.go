@@ -7,9 +7,9 @@ import (
 
 	"github.com/Microsoft/go-winio"
 
-	"l4ds-nesica-emulator/internal/nesys"
-	"l4ds-nesica-emulator/internal/pipe"
-	"l4ds-nesica-emulator/internal/wire"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/nesys"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/pipe"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/wire"
 )
 
 func TestListen_GameClient_CompletesTheStartupSequence(t *testing.T) {

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"l4ds-nesica-emulator/internal/matching"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/matching"
 )
 
 func TestParseQuery_ReadsTheTypeAndItems(t *testing.T) {

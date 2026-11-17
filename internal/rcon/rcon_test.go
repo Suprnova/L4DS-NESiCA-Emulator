@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"l4ds-nesica-emulator/internal/rcon"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/rcon"
 )
 
 // fakeServer accepts one connection and answers like a Source server: an empty response and an

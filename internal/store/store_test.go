@@ -9,7 +9,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"l4ds-nesica-emulator/internal/store"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/store"
 )
 
 func openStore(t *testing.T) *store.Store {

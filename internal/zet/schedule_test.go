@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"l4ds-nesica-emulator/internal/store"
-	"l4ds-nesica-emulator/internal/zet"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/store"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/zet"
 )
 
 func scheduleServer(t *testing.T, schedule zet.Schedule) *zet.Server {

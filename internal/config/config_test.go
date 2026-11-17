@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"l4ds-nesica-emulator/internal/config"
-	"l4ds-nesica-emulator/internal/zet"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/config"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/zet"
 )
 
 func writeConfig(t *testing.T, text string) string {

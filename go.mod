@@ -1,4 +1,4 @@
-module l4ds-nesica-emulator
+module github.com/Suprnova/L4DS-NESiCA-Emulator
 
 go 1.27
 

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"l4ds-nesica-emulator/internal/game"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/game"
 )
 
 // writeGameFolder writes a game folder with the files LoadFolder reads, and returns its path.

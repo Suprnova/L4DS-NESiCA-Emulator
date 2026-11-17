@@ -20,15 +20,15 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"l4ds-nesica-emulator/internal/config"
-	"l4ds-nesica-emulator/internal/dedicated"
-	"l4ds-nesica-emulator/internal/game"
-	"l4ds-nesica-emulator/internal/matching"
-	"l4ds-nesica-emulator/internal/nesys"
-	"l4ds-nesica-emulator/internal/pipe"
-	"l4ds-nesica-emulator/internal/store"
-	"l4ds-nesica-emulator/internal/wire"
-	"l4ds-nesica-emulator/internal/zet"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/config"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/dedicated"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/game"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/matching"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/nesys"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/pipe"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/store"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/wire"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/zet"
 )
 
 func main() {

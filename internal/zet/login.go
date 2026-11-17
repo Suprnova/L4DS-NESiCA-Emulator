@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"l4ds-nesica-emulator/internal/store"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/store"
 )
 
 // Lines of the login reply that carry no data: the count of each empty group (titles, dailys,

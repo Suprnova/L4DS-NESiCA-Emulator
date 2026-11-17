@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"l4ds-nesica-emulator/internal/game"
-	"l4ds-nesica-emulator/internal/store"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/game"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/store"
 )
 
 // Server is the ZET game server.

@@ -5,7 +5,7 @@ import (
 	"io"
 	"testing"
 
-	"l4ds-nesica-emulator/internal/wire"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/wire"
 )
 
 func TestReadFrame_BackToBackFrames_ReadsEachInOrder(t *testing.T) {

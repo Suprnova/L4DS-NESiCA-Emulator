@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"l4ds-nesica-emulator/internal/game"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/game"
 )
 
 const versusTable = `// exported from VersusClassDataTable.xlsm

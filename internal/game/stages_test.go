@@ -8,7 +8,7 @@ import (
 	"testing"
 	"unicode/utf16"
 
-	"l4ds-nesica-emulator/internal/game"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/game"
 )
 
 func TestParseStages_OrdersStagesAndChaptersByNumber(t *testing.T) {
