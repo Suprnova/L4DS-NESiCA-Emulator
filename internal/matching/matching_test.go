@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"net/netip"
 	"slices"
+	"strconv"
 	"testing"
 
 	"l4ds-nesica-emulator/internal/matching"
@@ -336,14 +337,74 @@ func TestMaster_StoreLobby_ListsTheStoresRoomsNewestFirst(t *testing.T) {
 	}
 }
 
-func TestMaster_NationalEventNewRoom_CreatesARoomWithTheLongEntry(t *testing.T) {
-	query := searchQuery("13", "2")
-	query.Fields["mode"] = "2"
+// eventQuery is a national event query (mode 2, rule 1) for event 1 on the first chapter of
+// campaign 1 at normal difficulty.
+func eventQuery(sequence, room, player string) matching.Query {
+	return matching.Query{Type: '2', Fields: map[string]string{"seqNo": sequence, "room": room, "mode": "2", "rule": "1", "difficulty": "2", "stage": "1", "chapter": "1", "event": "1", "player_id": player, "progress": "20", "room_id": "0"}}
+}
 
-	got := single(t, storeMaster().Reply(lan, query))
+func TestMaster_EnteringANationalEventWithNoRoom_CreatesOneOnAServer(t *testing.T) {
+	got := single(t, storeMaster().Reply(lan, eventQuery("13", "3", "1")))
 
-	if len(got) != entrySize || !slices.Equal(got[7:13], []byte{127, 0, 0, 2, 0x6d, 0x74}) || field(got, playersAt) != "Boba" {
-		t.Fatalf("entry size %d, address %v, players %q", len(got), got[7:13], field(got, playersAt))
+	if len(got) != entrySize || !slices.Equal(got[7:20], []byte{127, 0, 0, 2, 0x6d, 0x74, 0, 0, 0, 1, 1, 1, 2}) || field(got, playersAt) != "Boba" {
+		t.Fatalf("entry size %d, room %v, players %q", len(got), got[7:20], field(got, playersAt))
+	}
+}
+
+func TestMaster_EnteringANationalEvent_JoinsTheEventsRoom(t *testing.T) {
+	master := storeMaster()
+	master.Reply(lan, eventQuery("13", "3", "1"))
+
+	got := single(t, master.Reply(lan, eventQuery("14", "3", "3")))
+
+	if got[16] != 1 || field(got, playersAt) != "Boba,Ellis" {
+		t.Fatalf("room id %d, players %q", got[16], field(got, playersAt))
+	}
+}
+
+func TestMaster_EnteringAnotherNationalEvent_CreatesItsOwnRoom(t *testing.T) {
+	master := storeMaster()
+	master.Reply(lan, eventQuery("13", "3", "1"))
+	other := eventQuery("14", "3", "3")
+	other.Fields["event"] = "2"
+
+	got := single(t, master.Reply(lan, other))
+
+	if got[16] != 2 || field(got, playersAt) != "Ellis" {
+		t.Fatalf("room id %d, players %q", got[16], field(got, playersAt))
+	}
+}
+
+func TestMaster_EnteringAFullNationalEventRoom_CreatesAnotherRoom(t *testing.T) {
+	master := storeMaster()
+	for player := range 4 {
+		master.Reply(lan, eventQuery("13", "3", strconv.Itoa(player+1)))
+	}
+
+	got := single(t, master.Reply(lan, eventQuery("14", "3", "5")))
+
+	if got[16] != 2 {
+		t.Fatalf("room id %d, want 2", got[16])
+	}
+}
+
+func TestMaster_ResentNationalEventEntry_ReturnsTheSameRoom(t *testing.T) {
+	master := storeMaster()
+	master.Reply(lan, eventQuery("13", "3", "1"))
+
+	got := single(t, master.Reply(lan, eventQuery("14", "3", "1")))
+
+	if got[16] != 1 || field(got, playersAt) != "Boba" {
+		t.Fatalf("room id %d, players %q", got[16], field(got, playersAt))
+	}
+}
+
+func TestMaster_EnteringANationalEventWithNoServerAvailable_AnswersNoServer(t *testing.T) {
+	got := single(t, matching.NewMaster(matching.Config{Hosts: servers()}).Reply(lan, eventQuery("13", "3", "1")))
+
+	want := []byte{0, 0, 0, 13, 0x7a}
+	if !slices.Equal(got, want) {
+		t.Fatalf("Reply() = %v, want %v", got, want)
 	}
 }
 

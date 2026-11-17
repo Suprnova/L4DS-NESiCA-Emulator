@@ -42,6 +42,12 @@ const (
 	ruleClan  = 2
 	ruleStore = 3
 
+	// modeNationalEvent is the mode field of a national event query.
+	modeNationalEvent = 2
+
+	// coopPlayers is how many players a co-op room holds.
+	coopPlayers = 4
+
 	// gamePort is the port of a cabinet's own listen server.
 	gamePort = 27015
 
@@ -96,6 +102,10 @@ func (q Query) lobby() bool {
 	return (rule == ruleClan || rule == ruleStore) && mode >= 1 && mode <= 4
 }
 
+// nationalEvent reports whether the query is for a national event room, which a player enters
+// without a search.
+func (q Query) nationalEvent() bool { return q.number("mode") == modeNationalEvent && !q.lobby() }
+
 // longEntry reports whether the game expects the long room entry, with members and status, in
 // replies to the query. The test mirrors the engine's (0x102115a0): lobby rooms, national events
 // and versus.
@@ -127,6 +137,7 @@ type room struct {
 	server     netip.AddrPort
 	mode       string
 	rule       string
+	event      string
 	tenpo      string
 	machine    string
 	password   string
@@ -192,6 +203,10 @@ func NewMaster(config Config) *Master {
 // rule and difficulty, or an empty list. A request to enter a room (room 3) adds the asking
 // player to the room a search would find and returns it, or answers "room lost".
 //
+// National event queries enter a room without a search: a request to enter (room 3) adds the
+// asking player to the newest room for the same event and stage with fewer than four players, or
+// creates one, and returns it; it answers "no server" when no server is available.
+//
 // Store and clan lobby queries (see [Query.lobby]) list every lobby room with the same mode and
 // rule, and for store rooms the same store and matching group, newest first. Opening the lobby
 // (room 2) also gives the asking player a room of their own, without a server, unless they are
@@ -234,6 +249,11 @@ func (m *Master) Reply(from netip.Addr, query Query) [][]byte {
 	case query.lobby() && (request == lobbyRoom || request == lobbyJoin):
 		var r *room
 		if r, failure = m.playLobbyRoom(from.Unmap(), query); r != nil {
+			found = []*room{r}
+		}
+	case query.nationalEvent() && request == enterRoom:
+		var r *room
+		if r, failure = m.joinEvent(from.Unmap(), query); r != nil {
 			found = []*room{r}
 		}
 	case !query.lobby() && request == enterRoom:
@@ -357,6 +377,7 @@ func (m *Master) newRoom(server netip.AddrPort, query Query) *room {
 		server:     server,
 		mode:       query.Fields["mode"],
 		rule:       query.Fields["rule"],
+		event:      query.Fields["event"],
 		tenpo:      query.Fields["tenpo"],
 		machine:    query.Fields["machine"],
 		password:   query.Fields["password"],
@@ -366,12 +387,23 @@ func (m *Master) newRoom(server netip.AddrPort, query Query) *room {
 		permission: permissionNone,
 	}
 	if !query.lobby() {
-		created.campaign = byte(max(query.number("stage"), 1))
-		created.chapter = byte(max(query.number("chapter"), 1))
-		created.difficulty = query.difficulty()
+		created.campaign, created.chapter, created.difficulty = query.stage()
 	}
 	m.nextRoomID++
 	return created
+}
+
+// stage returns the campaign, chapter and difficulty of the query as a room entry carries them,
+// none of them 0.
+func (q Query) stage() (campaign, chapter, difficulty byte) {
+	return byte(max(q.number("stage"), 1)), byte(max(q.number("chapter"), 1)), q.difficulty()
+}
+
+// sameStage reports whether r has the query's mode, rule, campaign, chapter and difficulty.
+func (r *room) sameStage(query Query) bool {
+	campaign, chapter, difficulty := query.stage()
+	return r.mode == query.Fields["mode"] && r.rule == query.Fields["rule"] &&
+		r.campaign == campaign && r.chapter == chapter && r.difficulty == difficulty
 }
 
 func (m *Master) create(host netip.Addr, query Query) *room {
@@ -412,6 +444,33 @@ func (m *Master) search(query Query) []*room {
 		found = append(found, r)
 	}
 	return found
+}
+
+// joinEvent puts the asking player in the newest national event room for the query's event and
+// stage that has a free place, or in a new one. It returns the room, or the failure code to
+// answer with.
+func (m *Master) joinEvent(host netip.Addr, query Query) (*room, byte) {
+	player := query.player()
+	for _, r := range slices.Backward(m.rooms) {
+		if !r.sameStage(query) || r.event != query.Fields["event"] {
+			continue
+		}
+		if slices.Contains(r.members, player) {
+			return r, 0
+		}
+		if len(r.members) < coopPlayers {
+			r.members = append(r.members, player)
+			return r, 0
+		}
+	}
+
+	server, ok := m.host(host)
+	if !ok {
+		return nil, errNoServer
+	}
+	created := m.newRoom(server, query)
+	m.rooms = append(m.rooms, created)
+	return created, 0
 }
 
 func (m *Master) enter(query Query) *room {
