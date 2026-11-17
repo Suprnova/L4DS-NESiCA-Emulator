@@ -12,4 +12,8 @@ A server for the online services of the defunct arcade game *Left 4 Dead Survivo
 
 ## Status
 
-Early development. Only the pipe protocol framing exists so far.
+In development. Only `l4ds-aio` exists so far, and it runs on Windows next to the game. With it, the unmodified game reaches its online mode: card registration and login, single-player chapters with saved progress, and national co-op, whose rooms are hosted by dedicated servers that `l4ds-aio` runs from a patched private copy of the game. The tooling that prepares that copy is not in the repository yet.
+
+```
+go run ./cmd/l4ds-aio -game-dir <game folder> -ds-dir <dedicated server folder>
+```
