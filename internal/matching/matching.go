@@ -28,8 +28,10 @@ const (
 
 	// Values of the room field. For national rooms, a search for a room to join that finds one is
 	// followed by a request to enter it, with the same fields. In a store or clan lobby, opening
-	// the lobby sends lobbyEntry, refreshing the list sends joinSearch, and creating or joining a
-	// room sends lobbyRoom with the room's id.
+	// the lobby sends lobbyEntry, refreshing the list sends joinSearch, joining someone else's room
+	// sends lobbyJoin with its id, and creating a room, or waiting in a joined one for its stage,
+	// sends lobbyRoom with the room's id.
+	lobbyJoin  = "1"
 	newRoom    = "2"
 	lobbyEntry = "2"
 	enterRoom  = "3"
@@ -180,7 +182,8 @@ func NewMaster(config Config) *Master {
 // already in one. Creating or joining a room (room 4, with the room's id) gives the room a server
 // when its owner asks, adds anyone else as a member, takes the stage from the owner's query once
 // it has one, and returns the room; it answers "room lost" when the room is gone and "no server"
-// when no server is available.
+// when no server is available. Joining someone else's room (room 1, with its id) makes the
+// asking player a member in the same way.
 //
 // Other room values get no answer.
 func (m *Master) Reply(from netip.Addr, query Query) [][]byte {
@@ -208,7 +211,7 @@ func (m *Master) Reply(from netip.Addr, query Query) [][]byte {
 		if found = m.search(query); len(found) == 0 && !query.lobby() {
 			failure = errEmptyList
 		}
-	case query.lobby() && request == lobbyRoom:
+	case query.lobby() && (request == lobbyRoom || request == lobbyJoin):
 		var r *room
 		if r, failure = m.playLobbyRoom(from.Unmap(), query); r != nil {
 			found = []*room{r}
@@ -274,9 +277,9 @@ func (m *Master) enterLobby(query Query) {
 	}
 }
 
-// playLobbyRoom handles a request to create or join the lobby room with the query's room_id: the
-// owner's request gives it a server and its stage, anyone else's makes them a member and drops
-// the empty lobby room of their own. It returns the room, or the failure code to answer with.
+// playLobbyRoom handles a request to create, join or wait in the lobby room with the query's
+// room_id: the owner's request gives it a server and its stage, anyone else's makes them a member
+// and drops the empty lobby room of their own. It returns the room, or the failure code to answer with.
 func (m *Master) playLobbyRoom(host netip.Addr, query Query) (*room, byte) {
 	id, _ := strconv.ParseUint(query.Fields["room_id"], 10, 32)
 	i := slices.IndexFunc(m.rooms, func(r *room) bool { return uint64(r.id) == id })

@@ -284,7 +284,10 @@ func TestMaster_PlayerJoinsALobbyRoom_BecomesAMemberAndLosesTheirOwnRoom(t *test
 	master.Reply(lan, storeQuery("12", "2", "3"))
 	master.Reply(lan, storeRoom("13", "1", "1"))
 
-	got := single(t, master.Reply(lan, storeRoom("14", "3", "1")))
+	join := storeRoom("14", "3", "1")
+	join.Fields["room"] = "1"
+
+	got := single(t, master.Reply(lan, join))
 	listed := master.Reply(lan, storeQuery("15", "5", "3"))
 
 	status := got[statusAt : statusAt+6]
@@ -323,5 +326,24 @@ func TestMaster_RefreshingAnEmptyStoreLobby_AnswersAnEmptySuccess(t *testing.T) 
 	want := []byte{0, 0, 0, 11, 1, 0, 0}
 	if !slices.Equal(got, want) {
 		t.Fatalf("Reply() = %v, want %v", got, want)
+	}
+}
+
+func TestMaster_MemberWaitingInARoom_GetsItsServerAndStageOnceTheOwnerPicksOne(t *testing.T) {
+	master := storeMaster()
+	master.Reply(lan, storeQuery("11", "2", "1"))
+	master.Reply(lan, storeQuery("12", "2", "3"))
+	join := storeRoom("13", "3", "1")
+	join.Fields["room"] = "1"
+	master.Reply(lan, join)
+	master.Reply(lan, storeRoom("14", "1", "1"))
+	chosen := storeRoom("15", "1", "1")
+	chosen.Fields["stage"], chosen.Fields["chapter"], chosen.Fields["difficulty"] = "1", "1", "1"
+	master.Reply(lan, chosen)
+
+	got := single(t, master.Reply(lan, storeRoom("16", "3", "1")))
+
+	if !slices.Equal(got[7:13], []byte{127, 0, 0, 2, 0x6d, 0x74}) || !slices.Equal(got[17:20], []byte{1, 1, 2}) || field(got, playersAt) != "Boba,Ellis" {
+		t.Fatalf("address %v, campaign, chapter and difficulty %v, players %q", got[7:13], got[17:20], field(got, playersAt))
 	}
 }
