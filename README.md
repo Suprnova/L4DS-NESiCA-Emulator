@@ -30,8 +30,10 @@ go run ./cmd/l4ds-tree build -game-dir <game folder> -out <client tree> -client
 Run the server:
 
 ```
-go run ./cmd/l4ds-aio -game-dir <game folder> -ds-dir <server tree>
+go run ./cmd/l4ds-aio -game-dir <game folder> -ds-dir <server tree> [-config <file>]
 ```
+
+The configuration file sets the store's name and prefecture, the server key, and the versus schedule and events; `l4ds.example.yaml` describes every setting and schedules a versus unit and two sample events. Without one, nothing is scheduled and versus and the event modes stay unavailable.
 
 Run the game from the client tree with the usual arcade command line, and put a card on the reader from the game's console:
 
