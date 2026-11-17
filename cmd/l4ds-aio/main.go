@@ -1,6 +1,7 @@
 //go:build windows
 
-// Command l4ds-aio runs the NESYS pipe service for local development.
+// Command l4ds-aio runs the whole server on one PC: the NESYS pipe service, the game server, the
+// matching master and the dedicated servers that host rooms.
 package main
 
 import (
@@ -69,19 +70,12 @@ func main() {
 
 	catalog := zet.Catalog{StoreName: settings.Store.Name, Schedule: schedule}
 	if *gameDir != "" {
-		var err error
-		if catalog.Levels, err = loadLevels(*gameDir); err != nil {
-			slog.Error("load level table", "game-dir", *gameDir, "error", err)
+		folder, err := game.LoadFolder(*gameDir)
+		if err != nil {
+			slog.Error("load game folder", "game-dir", *gameDir, "error", err)
 			os.Exit(1)
 		}
-		if catalog.VersusClasses, err = loadVersusClasses(*gameDir); err != nil {
-			slog.Error("load versus class table", "game-dir", *gameDir, "error", err)
-			os.Exit(1)
-		}
-		if catalog.Stages, err = loadStages(*gameDir); err != nil {
-			slog.Error("load stages", "game-dir", *gameDir, "error", err)
-			os.Exit(1)
-		}
+		catalog.Levels, catalog.VersusClasses, catalog.Stages = folder.Levels, folder.VersusClasses, folder.Stages
 	}
 
 	players, err := store.Open(*dbPath)
@@ -238,55 +232,4 @@ func logRequests(next http.Handler) http.Handler {
 		slog.Info("http", "path", r.URL.Path, "body", string(body))
 		next.ServeHTTP(w, r)
 	})
-}
-
-func loadLevels(gameDir string) (*game.LevelTable, error) {
-	file, err := os.Open(filepath.Join(gameDir, "left4dead2", "resource", "LevelTable.txt"))
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-	return game.ParseLevelTable(file)
-}
-
-func loadVersusClasses(gameDir string) ([]game.VersusClass, error) {
-	file, err := os.Open(filepath.Join(gameDir, "left4dead2", "resource", "VersusClassDataTable.txt"))
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-	return game.ParseVersusClasses(file)
-}
-
-// stageNameFiles are the localization files that name the stages and chapters, in the order
-// the game searches them reversed, so the update folder's text wins.
-var stageNameFiles = []string{
-	filepath.Join("left4dead2", "resource", "l4d360ui_japanese.txt"),
-	filepath.Join("update", "resource", "l4d360ui_tu_japanese.txt"),
-}
-
-// loadStages reads the game's stage map table and names its stages and chapters in Japanese.
-func loadStages(gameDir string) ([]game.Stage, error) {
-	tokens := map[string]string{}
-	for _, name := range stageNameFiles {
-		if err := parseTokens(filepath.Join(gameDir, name), tokens); err != nil {
-			return nil, err
-		}
-	}
-
-	file, err := os.Open(filepath.Join(gameDir, "left4dead2", "resource", "stage_solo.txt"))
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-	return game.ParseStages(file, tokens)
-}
-
-func parseTokens(path string, tokens map[string]string) error {
-	file, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	return game.ParseTokens(file, tokens)
 }
