@@ -84,6 +84,14 @@ func TestReplace_AddressOutsideTheFile_ReturnsAnError(t *testing.T) {
 	}
 }
 
+func TestOthers_ClientPatches_AreTheServerPatches(t *testing.T) {
+	got := others(ClientPatches)
+
+	if len(got) != len(ServerPatches) || got[0].VA != ServerPatches[0].VA {
+		t.Fatalf("others = %d patches", len(got))
+	}
+}
+
 // TestPatches_MatchTheGame checks every patch against the installed game named by
 // L4DS_GAME_DIR: each site holds its original bytes and avoids relocated bytes.
 func TestPatches_MatchTheGame(t *testing.T) {

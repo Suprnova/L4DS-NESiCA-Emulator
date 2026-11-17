@@ -18,7 +18,9 @@ var ErrExists = errors.New("gametree: folder already exists")
 
 // Build creates a tree at out from the game installed at gameDir and applies patches to it. bin,
 // the loose files and the folders the engine writes are copies; every other folder is a
-// junction to the game's, so the tree is small and the game itself is never written to.
+// junction to the game's, so the tree is small and the game itself is never written to. Known
+// patches not in patches are reverted in the copy, so a tree built from a patched install
+// carries only its own.
 //
 // Never delete a tree with a recursive delete that follows junctions (Windows PowerShell 5.1's
 // Remove-Item -Recurse does): it would delete the game's files through them.
@@ -49,6 +51,9 @@ func Build(gameDir, out string, patches []Patch) error {
 		if err != nil {
 			return err
 		}
+	}
+	if err := Revert(out, others(patches)); err != nil {
+		return err
 	}
 	return Apply(out, patches)
 }

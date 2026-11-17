@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 )
 
 // Patch replaces Original with Patched at virtual address VA of a DLL in a tree's bin folder.
@@ -62,6 +63,17 @@ var ClientPatches = []Patch{
 		"change_debug_dummyCardID is a release command instead of a cheat; debug_dummyCardID itself is hidden from the console"},
 	{"engine.dll", 0x101ec647, h("7404"), h("eb04"),
 		"a card on the reader no longer stops the startup and attract movies; input still does"},
+}
+
+// others returns the known patches (ServerPatches and ClientPatches) that are not in patches.
+func others(patches []Patch) []Patch {
+	var rest []Patch
+	for _, p := range slices.Concat(ServerPatches, ClientPatches) {
+		if !slices.ContainsFunc(patches, func(q Patch) bool { return q.DLL == p.DLL && q.VA == p.VA }) {
+			rest = append(rest, p)
+		}
+	}
+	return rest
 }
 
 // ErrUnexpectedBytes reports that a patch site holds neither the original nor the patched bytes.
