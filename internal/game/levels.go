@@ -8,7 +8,6 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
-	"strings"
 )
 
 var (
@@ -29,28 +28,16 @@ func ParseLevelTable(r io.Reader) (*LevelTable, error) {
 		return nil, err
 	}
 
-	var tokens []string
-	for _, match := range token.FindAllStringSubmatch(string(text), -1) {
-		if len(match[0]) > 1 && match[0][:2] == "//" {
-			continue
-		}
-		tokens = append(tokens, match[0])
-	}
-
 	baseExp := map[int]int64{}
-	for i := 0; i+2 < len(tokens); i++ {
-		level := levelEntry.FindStringSubmatch(unquote(tokens[i]))
-		if level == nil || tokens[i+1] != "{" {
+	for name, block := range keyValueBlocks(string(text)) {
+		level := levelEntry.FindStringSubmatch(name)
+		exp, found := block["BaseExp"]
+		if level == nil || !found {
 			continue
 		}
 		number, _ := strconv.Atoi(level[1])
-		for j := i + 2; j+1 < len(tokens) && tokens[j] != "}"; j += 2 {
-			if unquote(tokens[j]) == "BaseExp" {
-				baseExp[number], err = strconv.ParseInt(unquote(tokens[j+1]), 10, 64)
-				if err != nil {
-					return nil, fmt.Errorf("level %d: %w", number, err)
-				}
-			}
+		if baseExp[number], err = strconv.ParseInt(exp, 10, 64); err != nil {
+			return nil, fmt.Errorf("level %d: %w", number, err)
 		}
 	}
 
@@ -79,5 +66,3 @@ func (t *LevelTable) Level(exp int64) int {
 	reached, _ := slices.BinarySearch(t.baseExp, exp+1)
 	return max(reached, 1)
 }
-
-func unquote(token string) string { return strings.Trim(token, `"`) }
