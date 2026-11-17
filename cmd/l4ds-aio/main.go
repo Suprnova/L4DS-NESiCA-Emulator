@@ -109,9 +109,10 @@ func main() {
 	}
 	defer master.Close()
 	go matching.NewMaster(matching.Config{
-		Hosts:      hosts,
-		PlayerName: playerName(players),
-		StoreName:  config.Store.Name,
+		Hosts:       hosts,
+		PlayerName:  playerName(players),
+		StoreName:   config.Store.Name,
+		VersusClass: versusClass(players),
 	}).Serve(master)
 
 	if *gameServerAddr != "" {
@@ -190,6 +191,17 @@ func playerName(players *store.Store) func(int64) string {
 			return player.Name
 		}
 		return strconv.FormatInt(id, 10)
+	}
+}
+
+// versusClass returns a lookup of players' versus classes for versus rooms, 0 for an unknown
+// player.
+func versusClass(players *store.Store) func(int64) int {
+	return func(id int64) int {
+		if player, err := players.Player(id); err == nil {
+			return int(player.VSClassID)
+		}
+		return 0
 	}
 }
 

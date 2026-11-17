@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strconv"
 	"testing"
+	"time"
 
 	"l4ds-nesica-emulator/internal/matching"
 )
@@ -433,5 +434,161 @@ func TestMaster_MemberWaitingInARoom_GetsItsServerAndStageOnceTheOwnerPicksOne(t
 
 	if !slices.Equal(got[7:13], []byte{127, 0, 0, 2, 0x6d, 0x74}) || !slices.Equal(got[17:20], []byte{1, 1, 1}) || field(got, playersAt) != "Boba,Ellis" {
 		t.Fatalf("address %v, campaign, chapter and difficulty %v, players %q", got[7:13], got[17:20], field(got, playersAt))
+	}
+}
+
+// Versus entry offsets after the status bytes.
+const (
+	classesAt = statusAt + 6 + 4
+	numbersAt = classesAt + 8
+	expireAt  = numbersAt + 8
+)
+
+// versusQuery is a versus query (mode 7, rule 1) for unit 1 on the first chapter of campaign 1
+// at normal difficulty.
+func versusQuery(sequence, room, player string) matching.Query {
+	return matching.Query{Type: '2', Fields: map[string]string{"seqNo": sequence, "room": room, "mode": "7", "rule": "1", "difficulty": "2", "stage": "1", "chapter": "1", "event": "1", "player_id": player, "room_id": "0"}}
+}
+
+// versusMaster is a master with three servers, two named players and a clock the test moves.
+func versusMaster() (*matching.Master, *time.Time) {
+	now := time.Unix(1_800_000_000, 0)
+	master := storeMaster()
+	master.SetClock(func() time.Time { return now })
+	return master, &now
+}
+
+func TestMaster_JoiningVersusWithNobodyGathering_OpensARoomThatGathersForAMinute(t *testing.T) {
+	master, now := versusMaster()
+
+	got := single(t, master.Reply(lan, versusQuery("11", "3", "1")))
+
+	if len(got) != entrySize || !slices.Equal(got[7:13], make([]byte, 6)) || got[statusAt+1] != 1 || field(got, expireAt) != strconv.FormatInt(now.Unix()+60, 10) {
+		t.Fatalf("entry size %d, address %v, permission %d, expire %q", len(got), got[7:13], got[statusAt+1], field(got, expireAt))
+	}
+}
+
+func TestMaster_JoiningAGatheringVersusRoom_ListsItOncePerMember(t *testing.T) {
+	master, _ := versusMaster()
+	master.Reply(lan, versusQuery("11", "3", "1"))
+
+	got := master.Reply(lan, versusQuery("12", "3", "3"))
+
+	if len(got) != 2 || got[1][5] != 2 || got[1][6] != 1 || field(got[0], playersAt) != "Boba,Ellis" {
+		t.Fatalf("Reply() returned %d datagrams, players %q", len(got), field(got[0], playersAt))
+	}
+}
+
+func TestMaster_AskingForTheVersusMatch_DecidesTheRoomWithASideForEachMember(t *testing.T) {
+	master, _ := versusMaster()
+	master.Reply(lan, versusQuery("11", "3", "1"))
+	master.Reply(lan, versusQuery("12", "3", "3"))
+
+	got := single(t, master.Reply(lan, versusQuery("13", "4", "3")))
+
+	status := got[statusAt : statusAt+6]
+	if !slices.Equal(got[7:13], []byte{127, 0, 0, 2, 0x6d, 0x74}) || !slices.Equal(status, []byte{0, 0, 0, 0, 4, 0}) || !slices.Equal(got[classesAt:numbersAt], []byte{1, 1, 0, 0, 0, 0, 0, 0}) || !slices.Equal(got[numbersAt:expireAt], []byte{1, 5, 0, 0, 0, 0, 0, 0}) {
+		t.Fatalf("address %v, status %v, classes %v, numbers %v", got[7:13], status, got[classesAt:numbersAt], got[numbersAt:expireAt])
+	}
+}
+
+func TestMaster_PollingADecidedVersusRoom_ReturnsItOnceWithThePlayersSlot(t *testing.T) {
+	master, _ := versusMaster()
+	master.Reply(lan, versusQuery("11", "3", "1"))
+	master.Reply(lan, versusQuery("12", "3", "3"))
+	master.Reply(lan, versusQuery("13", "4", "3"))
+
+	got := single(t, master.Reply(lan, versusQuery("14", "5", "1")))
+
+	if got[statusAt+1] != 0 || got[statusAt+4] != 0 || field(got, playersAt) != "Boba,Ellis" {
+		t.Fatalf("permission %d, me %d, players %q", got[statusAt+1], got[statusAt+4], field(got, playersAt))
+	}
+}
+
+func TestMaster_AskingForTheVersusMatchAlone_DecidesTheRoomWithoutAServer(t *testing.T) {
+	hosts := servers(27020)
+	master := matching.NewMaster(matching.Config{Hosts: hosts})
+	master.Reply(lan, versusQuery("11", "3", "1"))
+
+	got := single(t, master.Reply(lan, versusQuery("12", "4", "1")))
+
+	if got[statusAt+1] != 0 || !slices.Equal(got[7:13], make([]byte, 6)) || len(hosts.free) != 1 {
+		t.Fatalf("permission %d, address %v, servers left %d", got[statusAt+1], got[7:13], len(hosts.free))
+	}
+}
+
+func TestMaster_EighthVersusPlayer_DecidesTheRoomAtOnce(t *testing.T) {
+	master, _ := versusMaster()
+	for player := range 7 {
+		master.Reply(lan, versusQuery("11", "3", strconv.Itoa(player+1)))
+	}
+
+	got := single(t, master.Reply(lan, versusQuery("12", "3", "8")))
+
+	if got[statusAt+1] != 0 || !slices.Equal(got[numbersAt:expireAt], []byte{1, 5, 2, 6, 3, 7, 4, 8}) {
+		t.Fatalf("permission %d, numbers %v", got[statusAt+1], got[numbersAt:expireAt])
+	}
+}
+
+func TestMaster_JoiningVersusAfterTheRoomExpired_OpensANewRoom(t *testing.T) {
+	master, now := versusMaster()
+	master.Reply(lan, versusQuery("11", "3", "1"))
+	*now = now.Add(61 * time.Second)
+
+	got := single(t, master.Reply(lan, versusQuery("12", "3", "3")))
+
+	if got[16] != 2 || field(got, playersAt) != "Ellis" {
+		t.Fatalf("room id %d, players %q", got[16], field(got, playersAt))
+	}
+}
+
+func TestMaster_VersusMemberWhoStopsPolling_LeavesTheGatheringRoom(t *testing.T) {
+	master, now := versusMaster()
+	master.Reply(lan, versusQuery("11", "3", "1"))
+	*now = now.Add(5 * time.Second)
+	master.Reply(lan, versusQuery("12", "3", "3"))
+	*now = now.Add(6 * time.Second)
+
+	got := master.Reply(lan, versusQuery("13", "5", "3"))
+
+	if len(got) != 1 || field(got[0], playersAt) != "Ellis" {
+		t.Fatalf("Reply() returned %d datagrams, players %q", len(got), field(got[0], playersAt))
+	}
+}
+
+func TestMaster_JoiningVersusAfterAMatch_OpensANewRoom(t *testing.T) {
+	master, _ := versusMaster()
+	master.Reply(lan, versusQuery("11", "3", "1"))
+	master.Reply(lan, versusQuery("12", "3", "3"))
+	master.Reply(lan, versusQuery("13", "4", "1"))
+
+	got := single(t, master.Reply(lan, versusQuery("14", "3", "1")))
+
+	if got[16] != 2 || got[statusAt+1] != 1 {
+		t.Fatalf("room id %d, permission %d", got[16], got[statusAt+1])
+	}
+}
+
+func TestMaster_PollingVersusWithoutARoom_AnswersRoomLost(t *testing.T) {
+	master, _ := versusMaster()
+
+	got := single(t, master.Reply(lan, versusQuery("11", "5", "1")))
+
+	want := []byte{0, 0, 0, 11, 0x7d}
+	if !slices.Equal(got, want) {
+		t.Fatalf("Reply() = %v, want %v", got, want)
+	}
+}
+
+func TestMaster_DecidedVersusRoom_ShowsEachMembersVersusClass(t *testing.T) {
+	classes := map[int64]int{1: 3, 3: 5}
+	master := matching.NewMaster(matching.Config{Hosts: servers(27020), VersusClass: func(id int64) int { return classes[id] }})
+	master.Reply(lan, versusQuery("11", "3", "1"))
+	master.Reply(lan, versusQuery("12", "3", "3"))
+
+	got := single(t, master.Reply(lan, versusQuery("13", "4", "1")))
+
+	if !slices.Equal(got[classesAt:numbersAt], []byte{3, 5, 0, 0, 0, 0, 0, 0}) {
+		t.Fatalf("classes %v", got[classesAt:numbersAt])
 	}
 }

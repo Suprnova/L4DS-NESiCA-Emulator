@@ -42,11 +42,21 @@ const (
 	ruleClan  = 2
 	ruleStore = 3
 
-	// modeNationalEvent is the mode field of a national event query.
+	// Values of the mode field.
 	modeNationalEvent = 2
+	modeVersus        = 7
 
-	// coopPlayers is how many players a co-op room holds.
-	coopPlayers = 4
+	// Values of the room field in versus. Joining sends versusJoin, the window then polls the
+	// room with versusPoll while it gathers players, and asks for the match with versusDecide
+	// once the room's gathering time is up.
+	versusJoin   = "3"
+	versusDecide = "4"
+	versusPoll   = "5"
+
+	// coopPlayers is how many players a co-op room holds, and versusPlayers a versus room, four
+	// a side.
+	coopPlayers   = 4
+	versusPlayers = 8
 
 	// gamePort is the port of a cabinet's own listen server.
 	gamePort = 27015
@@ -102,6 +112,9 @@ func (q Query) lobby() bool {
 	return (rule == ruleClan || rule == ruleStore) && mode >= 1 && mode <= 4
 }
 
+// versus reports whether the query is for a national versus room.
+func (q Query) versus() bool { return q.number("mode") == modeVersus }
+
 // nationalEvent reports whether the query is for a national event room, which a player enters
 // without a search.
 func (q Query) nationalEvent() bool { return q.number("mode") == modeNationalEvent && !q.lobby() }
@@ -121,6 +134,13 @@ const (
 	permissionNone      = 0xff // no icon: the room has no stage yet
 )
 
+// Values of a versus room's permission byte. The versus window starts the game when the reply is
+// a single room with versusDecided and at least two members.
+const (
+	versusDecided = 0
+	versusOpen    = 1
+)
+
 const (
 	// roomTTL is how long a room stays listed after it was created.
 	roomTTL = 10 * time.Minute
@@ -128,10 +148,20 @@ const (
 	// lobbyIdle is how long a lobby room without a server stays listed after its last query
 	// from a member; the lobby's own timer is 180 seconds.
 	lobbyIdle = 210 * time.Second
+
+	// versusGathering is how long a versus room gathers players. The game counts down to the
+	// room's expiry, and gives a room without one 60 seconds itself.
+	versusGathering = 60 * time.Second
+
+	// gatherIdle is how long a member of a versus room without a server stays in it after their
+	// last query; the game polls every 2 seconds.
+	gatherIdle = 10 * time.Second
 )
 
 // room is a room a cabinet has created, the game server that hosts it, and its members, the
-// first of whom owns it. A lobby room gets its server when its owner creates it for play.
+// first of whom owns it. A lobby room gets its server when its owner creates it for play; a
+// versus room gathers players until it expires, and gets its server and its members' slots when
+// it is decided.
 type room struct {
 	id         uint32
 	server     netip.AddrPort
@@ -148,6 +178,21 @@ type room struct {
 	members    []int64
 	created    time.Time
 	lastSeen   time.Time
+	expires    time.Time
+	slots      []byte
+	seen       map[int64]time.Time
+}
+
+// versus reports whether r is a versus room.
+func (r *room) versus() bool { return !r.expires.IsZero() }
+
+// listing returns the entries a versus room is listed as: one per member while it gathers
+// players, which the game counts, and the room alone once it is decided.
+func (r *room) listing() []*room {
+	if r.slots != nil {
+		return []*room{r}
+	}
+	return slices.Repeat([]*room{r}, len(r.members))
 }
 
 // Hosts provides the game servers that host new rooms.
@@ -176,6 +221,9 @@ type Config struct {
 	PlayerName func(playerID int64) string
 	// StoreName is the store shown for every member in room lists.
 	StoreName string
+	// VersusClass returns a player's versus class id, counted from 1, for versus rooms. When
+	// nil, every player is class 1.
+	VersusClass func(playerID int64) int
 }
 
 // Master tracks the rooms that cabinets have created and answers their queries.
@@ -202,6 +250,13 @@ func NewMaster(config Config) *Master {
 // room the player already owns. A search (room 5) returns the newest room with the same mode,
 // rule and difficulty, or an empty list. A request to enter a room (room 3) adds the asking
 // player to the room a search would find and returns it, or answers "room lost".
+//
+// Versus queries gather up to eight players for a versus unit and stage. Joining (room 3) adds
+// the asking player to the open room for the unit, or opens one that gathers players for 60
+// seconds. While a room gathers, every reply lists it once per member, and the game shows the
+// count; polling (room 5) returns the player's room. When the time is up the game asks for the
+// match (room 4): the room is decided, with a server and each member's side, and listed once. A
+// full room is decided at once. Polling or asking without a room answers "room lost".
 //
 // National event queries enter a room without a search: a request to enter (room 3) adds the
 // asking player to the newest room for the same event and stage with fewer than four players, or
@@ -239,6 +294,11 @@ func (m *Master) Reply(from netip.Addr, query Query) [][]byte {
 	var found []*room
 	failure := byte(0)
 	switch request := query.Fields["room"]; {
+	case query.versus() && (request == versusJoin || request == versusPoll || request == versusDecide):
+		var r *room
+		if r, failure = m.playVersus(from.Unmap(), query); r != nil {
+			found = r.listing()
+		}
 	case query.lobby() && request == lobbyEntry:
 		m.enterLobby(query)
 		found = m.search(query)
@@ -293,6 +353,10 @@ func (m *Master) dropEnded() {
 	m.rooms = slices.DeleteFunc(m.rooms, func(r *room) bool {
 		if now.Sub(r.created) > roomTTL {
 			return true
+		}
+		if r.versus() && !r.server.IsValid() {
+			r.members = slices.DeleteFunc(r.members, func(member int64) bool { return now.Sub(r.seen[member]) > gatherIdle })
+			return len(r.members) == 0
 		}
 		if !r.server.IsValid() {
 			return now.Sub(r.lastSeen) > lobbyIdle
@@ -473,6 +537,93 @@ func (m *Master) joinEvent(host netip.Addr, query Query) (*room, byte) {
 	return created, 0
 }
 
+// playVersus handles a versus query: joining puts the asking player in a gathering room (see
+// [Master.openVersusRoom]), and decides it once it is full; polling returns the player's room;
+// asking for the match decides the player's room unless it already is. It returns the room, or
+// the failure code to answer with.
+func (m *Master) playVersus(host netip.Addr, query Query) (*room, byte) {
+	player := query.player()
+	var r *room
+	switch query.Fields["room"] {
+	case versusJoin:
+		r = m.openVersusRoom(query)
+		if !slices.Contains(r.members, player) {
+			r.members = append(r.members, player)
+		}
+		if len(r.members) == versusPlayers {
+			m.decide(host, r)
+		}
+	case versusDecide:
+		if r = m.versusRoomOf(player); r != nil && r.slots == nil {
+			if failure := m.decide(host, r); failure != 0 {
+				return nil, failure
+			}
+		}
+	default:
+		r = m.versusRoomOf(player)
+	}
+	if r == nil {
+		return nil, errRoomLost
+	}
+	r.seen[player] = m.now()
+	return r, 0
+}
+
+// openVersusRoom returns the gathering versus room for the query's unit and stage that the
+// asking player is in, or else the newest one with a free place, or else a new one.
+func (m *Master) openVersusRoom(query Query) *room {
+	var open *room
+	for _, r := range slices.Backward(m.rooms) {
+		if !r.versus() || r.slots != nil || !m.now().Before(r.expires) || !r.sameStage(query) || r.event != query.Fields["event"] {
+			continue
+		}
+		if slices.Contains(r.members, query.player()) {
+			return r
+		}
+		if open == nil && len(r.members) < versusPlayers {
+			open = r
+		}
+	}
+	if open == nil {
+		open = m.newRoom(netip.AddrPort{}, query)
+		open.permission = versusOpen
+		open.expires = m.now().Add(versusGathering)
+		open.seen = map[int64]time.Time{}
+		m.rooms = append(m.rooms, open)
+	}
+	return open
+}
+
+// versusRoomOf returns the newest versus room the player is in, or nil.
+func (m *Master) versusRoomOf(player int64) *room {
+	for _, r := range slices.Backward(m.rooms) {
+		if r.versus() && slices.Contains(r.members, player) {
+			return r
+		}
+	}
+	return nil
+}
+
+// decide closes a gathering versus room and gives each member a slot, alternating between the
+// survivors (slots 0 to 3) and the infected (4 to 7). A room with players on both sides gets a
+// server; a room left with one member gets none, and the game then reports that not enough
+// players were found. It returns the failure code to answer with, or 0.
+func (m *Master) decide(host netip.Addr, r *room) byte {
+	if len(r.members) > 1 {
+		server, ok := m.host(host)
+		if !ok {
+			return errNoServer
+		}
+		r.server = server
+	}
+	r.permission = versusDecided
+	r.slots = make([]byte, len(r.members))
+	for i := range r.slots {
+		r.slots[i] = byte(i/2 + i%2*versusPlayers/2)
+	}
+	return 0
+}
+
 func (m *Master) enter(query Query) *room {
 	var target *room
 	if id, _ := strconv.ParseUint(query.Fields["room_id"], 10, 32); id != 0 {
@@ -492,7 +643,10 @@ func (m *Master) enter(query Query) *room {
 // and when the query expects the long entry the members, their titles, stores and clans, six status bytes (class
 // condition, permission, progress, whether the asking player owns the room, the asking player's
 // member index and the owner's), the password, two eight-byte arrays (class ids and numbers) and
-// an expiry date. Fields with unknown meaning are zero or empty.
+// an expiry date. In a decided versus room, the asking player's index is their slot, and the
+// arrays hold each member's versus class and slot plus 1; the game puts slots 1 to 4 on the
+// survivor side. A versus room's expiry is when it stops gathering, in Unix seconds. Fields with
+// unknown meaning are zero or empty.
 func (m *Master) appendEntry(b []byte, r *room, query Query) []byte {
 	if r.server.IsValid() {
 		b = append(b, r.server.Addr().AsSlice()...)
@@ -516,13 +670,27 @@ func (m *Master) appendEntry(b []byte, r *room, query Query) []byte {
 		stores[i] = m.config.StoreName
 	}
 	asker := query.player()
-	me := slices.Index(r.members, asker)
-	if me < 0 {
-		me = 0xff
+	me := 0xff
+	if i := slices.Index(r.members, asker); i >= 0 {
+		me = i
+		if r.slots != nil {
+			me = int(r.slots[i])
+		}
 	}
 	var ownerIsMe byte
 	if r.members[0] == asker {
 		ownerIsMe = 1
+	}
+	classes, numbers := make([]byte, versusPlayers), make([]byte, versusPlayers)
+	if r.slots != nil {
+		for i, member := range r.members[:min(len(r.members), versusPlayers)] {
+			classes[i] = m.versusClass(member)
+			numbers[i] = r.slots[i] + 1
+		}
+	}
+	expire := "0"
+	if r.versus() {
+		expire = strconv.FormatInt(r.expires.Unix(), 10)
 	}
 
 	b = appendField(b, strings.Join(names, ","), 0x100)
@@ -531,8 +699,17 @@ func (m *Master) appendEntry(b []byte, r *room, query Query) []byte {
 	b = appendField(b, "", 0x190)
 	b = append(b, 0, r.permission, 0, ownerIsMe, byte(me), 0)
 	b = appendField(b, r.password, 4)
-	b = append(b, make([]byte, 16)...)
-	return appendField(b, "0", 0x20)
+	b = append(b, classes...)
+	b = append(b, numbers...)
+	return appendField(b, expire, 0x20)
+}
+
+// versusClass returns a player's versus class id for room entries, 1 when unknown.
+func (m *Master) versusClass(player int64) byte {
+	if m.config.VersusClass == nil {
+		return 1
+	}
+	return byte(max(m.config.VersusClass(player), 1))
 }
 
 // appendField appends text as a NUL-padded field of size bytes, cut to leave room for a NUL.
