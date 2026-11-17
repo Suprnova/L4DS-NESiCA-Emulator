@@ -9,8 +9,13 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    runs-on: windows-latest
+  go:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
     steps:
       - uses: actions/checkout@v7
 
@@ -30,10 +35,6 @@ jobs:
 
       - name: Vet
         run: go vet ./...
-
-      - name: Vet for Linux
-        shell: bash
-        run: GOOS=linux go vet ./...
 
       - name: Test
         run: go test ./...
