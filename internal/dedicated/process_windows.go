@@ -54,8 +54,8 @@ func killOnCloseJob() (windows.Handle, error) {
 	return job, nil
 }
 
-// startServer runs a server on port in job, in a console window of its own. It loads
-// c1m1_hotel; a room's reservation changes the map.
+// startServer runs a server on port in job, with a console window of its own that the stub hides
+// unless config.ShowConsoles is set. It loads c1m1_hotel; a room's reservation changes the map.
 func startServer(config Config, job windows.Handle, port uint16, password string) (process, error) {
 	cmd := exec.Command(filepath.Join(config.Dir, "srcds.exe"),
 		"-console", "-game", "left4dead2", "-basedir", config.Dir, "-insecure",
@@ -64,6 +64,9 @@ func startServer(config Config, job windows.Handle, port uint16, password string
 		"+rcon_password", password, "+map", "c1m1_hotel")
 	cmd.Dir = config.Dir
 	cmd.Env = append(os.Environ(), "L4DS_DIR="+config.Dir)
+	if !config.ShowConsoles {
+		cmd.Env = append(cmd.Env, "L4DS_HIDE_CONSOLE=1")
+	}
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}

@@ -42,9 +42,11 @@ func main() {
 	dsPort := flag.Uint("ds-port", 27020, "game port of the first dedicated server; the others use the ports after it")
 	dsMax := flag.Int("ds-max", 4, "most dedicated servers running at once")
 	dsSpares := flag.Int("ds-spares", 1, "dedicated servers kept ready for new rooms")
+	dsConsole := flag.Bool("ds-console", false, "show each dedicated server's console window")
 	flag.Parse()
 
-	hosts, pool, err := roomHosts(*roomServer, *dsDir, *dsIP, *dsPort, *dsMax, *dsSpares)
+	dsConfig := dedicated.Config{Dir: *dsDir, Max: *dsMax, Spares: *dsSpares, ShowConsoles: *dsConsole}
+	hosts, pool, err := roomHosts(*roomServer, *dsIP, *dsPort, dsConfig)
 	if err != nil {
 		slog.Error("room servers", "error", err)
 		os.Exit(1)
@@ -133,11 +135,12 @@ func main() {
 	}
 }
 
-// roomHosts returns the servers that host new rooms: a pool of dedicated servers run from dir, a
-// server started by hand at roomServer, or nil for the creating machine's own listen server.
-func roomHosts(roomServer, dir, ip string, firstPort uint, maxServers, spares int) (matching.Hosts, *dedicated.Pool, error) {
+// roomHosts returns the servers that host new rooms: a pool of dedicated servers run from
+// config.Dir on ip from firstPort, a server started by hand at roomServer, or nil for the
+// creating machine's own listen server.
+func roomHosts(roomServer, ip string, firstPort uint, config dedicated.Config) (matching.Hosts, *dedicated.Pool, error) {
 	switch {
-	case roomServer != "" && dir != "":
+	case roomServer != "" && config.Dir != "":
 		return nil, nil, errors.New("-room-server and -ds-dir cannot be combined")
 	case roomServer != "":
 		address, err := netip.ParseAddrPort(roomServer)
@@ -145,19 +148,19 @@ func roomHosts(roomServer, dir, ip string, firstPort uint, maxServers, spares in
 			return nil, nil, fmt.Errorf("-room-server %q is not an IPv4 address and port", roomServer)
 		}
 		return matching.FixedHost(address), nil, nil
-	case dir != "":
-		address, err := netip.ParseAddr(ip)
-		if err != nil || !address.Is4() {
+	case config.Dir != "":
+		var err error
+		if config.IP, err = netip.ParseAddr(ip); err != nil || !config.IP.Is4() {
 			return nil, nil, fmt.Errorf("-ds-ip %q is not an IPv4 address", ip)
 		}
-		if firstPort == 0 || firstPort+uint(maxServers) > 65535 {
-			return nil, nil, fmt.Errorf("-ds-port %d leaves no room for %d servers", firstPort, maxServers)
+		if firstPort == 0 || firstPort+uint(config.Max) > 65535 {
+			return nil, nil, fmt.Errorf("-ds-port %d leaves no room for %d servers", firstPort, config.Max)
 		}
-		dir, err = filepath.Abs(dir)
-		if err != nil {
+		config.FirstPort = uint16(firstPort)
+		if config.Dir, err = filepath.Abs(config.Dir); err != nil {
 			return nil, nil, err
 		}
-		pool, err := dedicated.NewPool(dedicated.Config{Dir: dir, IP: address, FirstPort: uint16(firstPort), Max: maxServers, Spares: spares})
+		pool, err := dedicated.NewPool(config)
 		if err != nil {
 			return nil, nil, err
 		}

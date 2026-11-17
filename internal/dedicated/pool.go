@@ -41,6 +41,8 @@ type Config struct {
 	Max int
 	// Spares is how many servers are kept starting or ready for new rooms.
 	Spares int
+	// ShowConsoles shows each server's console window instead of hiding it.
+	ShowConsoles bool
 }
 
 // Status is what a server's status command reports.
