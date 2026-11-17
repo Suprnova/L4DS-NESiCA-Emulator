@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"slices"
+	"strconv"
 	"testing"
 
 	_ "modernc.org/sqlite"
@@ -197,5 +198,50 @@ func TestRecordResult_ClearedChapter_IsListedOnce(t *testing.T) {
 	want := []store.Clear{{StageID: 1, ChapterID: 1}, {StageID: 1, ChapterID: 2}}
 	if err != nil || !slices.Equal(clears, want) {
 		t.Fatalf("Clears() = %v, %v; want %v", clears, err, want)
+	}
+}
+
+func TestTopScorers_OrdersPlayersWithAScoreByScore(t *testing.T) {
+	s := openStore(t)
+	low, _ := s.Register("7020392000000001", "Low", 1)
+	high, _ := s.Register("7020392000000002", "High", 1)
+	s.Register("7020392000000003", "Unplayed", 1)
+	s.RecordResult(low.ID, store.Result{Score: 10})
+	s.RecordResult(high.ID, store.Result{Score: 90})
+
+	got, err := s.TopScorers(10)
+
+	if err != nil || len(got) != 2 || got[0].ID != high.ID || got[1].ID != low.ID {
+		t.Fatalf("TopScorers() = %+v, %v", got, err)
+	}
+}
+
+func TestTopScorers_StopsAtTheLimit(t *testing.T) {
+	s := openStore(t)
+	for i := range 3 {
+		player, _ := s.Register("702039200000000"+strconv.Itoa(i+1), "Player", 1)
+		s.RecordResult(player.ID, store.Result{Score: 10})
+	}
+
+	got, _ := s.TopScorers(2)
+
+	if len(got) != 2 {
+		t.Fatalf("TopScorers() returned %d players, want 2", len(got))
+	}
+}
+
+func TestTopVersusPlayers_OrdersVersusPlayersByVersusClassPoints(t *testing.T) {
+	s := openStore(t)
+	low, _ := s.Register("7020392000000001", "Low", 1)
+	high, _ := s.Register("7020392000000002", "High", 1)
+	coop, _ := s.Register("7020392000000003", "Coop", 1)
+	s.RecordResult(low.ID, store.Result{VSPlays: 1, VSClassPoint: 5})
+	s.RecordResult(high.ID, store.Result{VSPlays: 2, VSClassPoint: 40})
+	s.RecordResult(coop.ID, store.Result{Score: 100})
+
+	got, err := s.TopVersusPlayers(10)
+
+	if err != nil || len(got) != 2 || got[0].ID != high.ID || got[1].ID != low.ID {
+		t.Fatalf("TopVersusPlayers() = %+v, %v", got, err)
 	}
 }

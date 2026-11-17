@@ -258,14 +258,49 @@ func (s *Store) updatePlayer(query string, args ...any) error {
 	return nil
 }
 
-func (s *Store) player(where string, arg any) (Player, error) {
+// TopScorers returns up to limit players with a score, highest score first.
+func (s *Store) TopScorers(limit int) ([]Player, error) {
+	return s.players(`score > 0 ORDER BY score DESC, id LIMIT ?`, limit)
+}
+
+// TopVersusPlayers returns up to limit players who have played versus, most versus class points
+// first.
+func (s *Store) TopVersusPlayers(limit int) ([]Player, error) {
+	return s.players(`vs_plays > 0 ORDER BY vs_class_point DESC, id LIMIT ?`, limit)
+}
+
+// playerColumns lists the columns scanPlayer reads, in order.
+const playerColumns = `id, card_id, name, zet, exp, score, logins, chara_id,
+	coop_class_id, coop_class_point, vs_class_id, vs_class_point, vs_plays, vs_wins, ` + settingsColumns
+
+func scanPlayer(row interface{ Scan(...any) error }) (Player, error) {
 	var player Player
-	err := s.db.QueryRow(`SELECT id, card_id, name, zet, exp, score, logins, chara_id,
-		coop_class_id, coop_class_point, vs_class_id, vs_class_point, vs_plays, vs_wins, `+settingsColumns+` FROM players WHERE `+where, arg).
-		Scan(&player.ID, &player.CardID, &player.Name, &player.Zet, &player.Exp, &player.Score, &player.Logins, &player.CharaID,
-			&player.CoopClassID, &player.CoopClassPoint, &player.VSClassID, &player.VSClassPoint, &player.VSPlays, &player.VSWins,
-			&player.Settings.MasterVolume, &player.Settings.BGMVolume, &player.Settings.MouseHorizontalReverse,
-			&player.Settings.MouseVerticalReverse, &player.Settings.MouseSensitivity, &player.Settings.MouseAcceleration,
-			&player.Settings.KeyMap)
+	err := row.Scan(&player.ID, &player.CardID, &player.Name, &player.Zet, &player.Exp, &player.Score, &player.Logins, &player.CharaID,
+		&player.CoopClassID, &player.CoopClassPoint, &player.VSClassID, &player.VSClassPoint, &player.VSPlays, &player.VSWins,
+		&player.Settings.MasterVolume, &player.Settings.BGMVolume, &player.Settings.MouseHorizontalReverse,
+		&player.Settings.MouseVerticalReverse, &player.Settings.MouseSensitivity, &player.Settings.MouseAcceleration,
+		&player.Settings.KeyMap)
 	return player, err
+}
+
+func (s *Store) players(where string, args ...any) ([]Player, error) {
+	rows, err := s.db.Query(`SELECT `+playerColumns+` FROM players WHERE `+where, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var players []Player
+	for rows.Next() {
+		player, err := scanPlayer(rows)
+		if err != nil {
+			return nil, err
+		}
+		players = append(players, player)
+	}
+	return players, rows.Err()
+}
+
+func (s *Store) player(where string, arg any) (Player, error) {
+	return scanPlayer(s.db.QueryRow(`SELECT `+playerColumns+` FROM players WHERE `+where, arg))
 }
