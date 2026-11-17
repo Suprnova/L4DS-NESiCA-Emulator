@@ -102,6 +102,11 @@ func respond(config Config, request wire.Frame) []wire.Frame {
 		slog.Info("card update", "payload", fmt.Sprintf("%q", request.Payload[min(len(request.Payload), 16):]))
 		reply := wire.CardReply{Status: 1, Body: "1\n1\n"}
 		return []wire.Frame{{Command: wire.CardUpdateReply, Payload: reply.Encode()}}
+	case wire.RankingData:
+		// An empty ranking. The game fetches four rankings at startup and waits for each
+		// reply before it fetches the next startup data (the stage list, events, versus).
+		reply := wire.RankingReply{Status: 1, Body: "1\n1\n0\n"}
+		return []wire.Frame{{Command: wire.RankingDataReply, Payload: reply.Encode()}}
 	case wire.CardReissueTest:
 		return reissueTest(config.Cards, request.Payload)
 	case wire.CardInsert:

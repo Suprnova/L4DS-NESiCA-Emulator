@@ -62,6 +62,20 @@ func (r CardReply) Encode() []byte {
 	return append(buf, r.Body...)
 }
 
+// RankingReply is the payload of RankingDataReply: a status and a line-oriented body of
+// result, API_ID, the entry count and the entries.
+type RankingReply struct {
+	Status uint32
+	Body   string
+}
+
+// Encode returns the payload bytes.
+func (r RankingReply) Encode() []byte {
+	buf := binary.LittleEndian.AppendUint32(nil, r.Status)
+	buf = binary.LittleEndian.AppendUint32(buf, uint32(len(r.Body)))
+	return append(buf, r.Body...)
+}
+
 // CardWriteRequest is the payload of the CardInsert and CardUpdate commands: text the game
 // stores on a card.
 type CardWriteRequest struct {

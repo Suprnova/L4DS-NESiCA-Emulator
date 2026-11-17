@@ -213,6 +213,18 @@ func TestServe_CardUpdate_RepliesWithSuccess(t *testing.T) {
 	}
 }
 
+func TestServe_RankingData_RepliesWithAnEmptyRanking(t *testing.T) {
+	game := startGame(t)
+	request := []byte("\x0a\x00\x00\x00\x00\x00\x00\x00\x0b\x00\x00\x00tenpo_id=1\x00\x00\x00\x00\x00")
+
+	reply := exchange(t, game, wire.RankingData, request)
+
+	want := "\x01\x00\x00\x00\x06\x00\x00\x001\n1\n0\n"
+	if reply.Command != wire.RankingDataReply || string(reply.Payload) != want {
+		t.Fatalf("reply = %+v", reply)
+	}
+}
+
 func TestServe_IncomeEnd_RepliesWithPlayerAndStatus(t *testing.T) {
 	game := startGame(t)
 
