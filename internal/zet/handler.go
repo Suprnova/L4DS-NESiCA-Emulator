@@ -22,6 +22,7 @@ type Server struct {
 	schedule  Schedule
 	storeName string
 	leave     func(playerID int64, roomID uint32)
+	now       func() time.Time
 }
 
 // Catalog is what the server offers players besides their own data.
@@ -44,7 +45,7 @@ type Catalog struct {
 
 // NewServer returns a server that keeps its players in s and offers catalog.
 func NewServer(s *store.Store, catalog Catalog) *Server {
-	return &Server{store: s, levels: catalog.Levels, stages: catalog.Stages, classes: catalog.VersusClasses, schedule: catalog.Schedule, storeName: catalog.StoreName, leave: catalog.Leave}
+	return &Server{store: s, levels: catalog.Levels, stages: catalog.Stages, classes: catalog.VersusClasses, schedule: catalog.Schedule, storeName: catalog.StoreName, leave: catalog.Leave, now: time.Now}
 }
 
 // Handler returns the server's HTTP handler.
@@ -139,7 +140,7 @@ func (s *Server) result(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result := store.Result{
-		Played:      time.Now(),
+		Played:      s.now(),
 		GameMode:    formInt(r, "game_mode"),
 		StageID:     formInt(r, "stage_id"),
 		ChapterID:   formInt(r, "chapter_id"),

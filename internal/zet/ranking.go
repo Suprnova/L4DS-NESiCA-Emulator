@@ -1,6 +1,11 @@
 package zet
 
-import "slices"
+import (
+	"slices"
+	"time"
+
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/store"
+)
 
 // The rankings the game asks for at startup, in the order of its ranking screen.
 const (
@@ -15,32 +20,53 @@ const rankingSize = 10
 
 // Ranking answers a ranking request with the reply body: result, API_ID and the entry count,
 // then per player rank, player id, score, title, name, level, class id, class name, store name,
-// clan name and character, followed by the six avatar slots when the character is set. The co-op
-// rankings order players by score and show their co-op class; the versus rankings order the
-// players who have played versus by versus class points, show those as the score, and show their
-// versus class. Every player belongs to this server's one store, so the national and store
-// rankings are the same. Titles, class names, clans and avatars are empty.
+// clan name and character, followed by the six avatar slots when the character is set.
+//
+// The co-op rankings are monthly, as the attract screen titles them: players are ordered by the
+// total score of their results this calendar month (in the server's time zone), versus results
+// left out, and show their co-op class. The versus rankings order the players who have played
+// versus by versus class points over all time, show those as the score, and show their versus
+// class. Every player belongs to this server's one store, so the national and store rankings are
+// the same. Titles, class names, clans and avatars are empty.
 func (s *Server) Ranking(kind uint32) (string, error) {
-	versus := kind == RankingNationalVersus || kind == RankingStoreVersus
-	top := s.store.TopScorers
-	if versus {
-		top = s.store.TopVersusPlayers
-	}
-	players, err := top(rankingSize)
+	entries, err := s.rankingEntries(kind == RankingNationalVersus || kind == RankingStoreVersus)
 	if err != nil {
 		return "", err
 	}
 
-	lines := []any{1, 1, len(players)}
-	for rank, player := range players {
-		score, class := player.Score, player.CoopClassID
-		if versus {
-			score, class = player.VSClassPoint, player.VSClassID
-		}
-		lines = append(lines, rank+1, player.ID, score, "", player.Name, s.levels.Level(player.Exp), class, "", s.storeName, "", player.CharaID)
+	lines := []any{1, 1, len(entries)}
+	for rank, entry := range entries {
+		player := entry.player
+		lines = append(lines, rank+1, player.ID, entry.score, "", player.Name, s.levels.Level(player.Exp), entry.class, "", s.storeName, "", player.CharaID)
 		if player.CharaID != 0 {
 			lines = append(lines, slices.Repeat([]any{0}, emptyAvatarLines)...)
 		}
 	}
 	return lineBody(lines), nil
+}
+
+// rankingEntry is a ranked player with the score and class their entry shows.
+type rankingEntry struct {
+	player       store.Player
+	score, class int64
+}
+
+// rankingEntries returns the entries of the versus ranking or the co-op ranking, best first.
+func (s *Server) rankingEntries(versus bool) ([]rankingEntry, error) {
+	if versus {
+		players, err := s.store.TopVersusPlayers(rankingSize)
+		entries := make([]rankingEntry, len(players))
+		for i, player := range players {
+			entries[i] = rankingEntry{player, player.VSClassPoint, player.VSClassID}
+		}
+		return entries, err
+	}
+
+	now := s.now()
+	scorers, err := s.store.TopScorersSince(time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()), rankingSize)
+	entries := make([]rankingEntry, len(scorers))
+	for i, scorer := range scorers {
+		entries[i] = rankingEntry{scorer.Player, scorer.Score, scorer.Player.CoopClassID}
+	}
+	return entries, err
 }

@@ -410,9 +410,33 @@ func (s *Store) updatePlayer(query string, args ...any) error {
 	return nil
 }
 
-// TopScorers returns up to limit players with a score, highest score first.
-func (s *Store) TopScorers(limit int) ([]Player, error) {
-	return s.players(`score > 0 ORDER BY score DESC, id LIMIT ?`, limit)
+// Scorer is a player and the score they made over a period.
+type Scorer struct {
+	Player Player
+	Score  int64
+}
+
+// TopScorersSince returns up to limit players by the total score of their results played at or
+// after since, highest first, leaving out versus results and players with no score.
+func (s *Store) TopScorersSince(since time.Time, limit int) ([]Scorer, error) {
+	rows, err := s.db.Query(`SELECT `+playerColumns+`, total FROM players
+		JOIN (SELECT player_id, SUM(score) AS total FROM results WHERE played_at >= ? AND vs_plays = 0 GROUP BY player_id)
+		ON player_id = id
+		WHERE total > 0 ORDER BY total DESC, id LIMIT ?`, since.Unix(), limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var scorers []Scorer
+	for rows.Next() {
+		var scorer Scorer
+		if scorer.Player, err = scanPlayer(rows, &scorer.Score); err != nil {
+			return nil, err
+		}
+		scorers = append(scorers, scorer)
+	}
+	return scorers, rows.Err()
 }
 
 // TopVersusPlayers returns up to limit players who have played versus, most versus class points
@@ -425,13 +449,14 @@ func (s *Store) TopVersusPlayers(limit int) ([]Player, error) {
 const playerColumns = `id, name, zet, exp, score, logins, chara_id,
 	coop_class_id, coop_class_point, vs_class_id, vs_class_point, vs_plays, vs_wins, ` + settingsColumns
 
-func scanPlayer(row interface{ Scan(...any) error }) (Player, error) {
+// scanPlayer reads a row of playerColumns, followed by any extra columns into extra.
+func scanPlayer(row interface{ Scan(...any) error }, extra ...any) (Player, error) {
 	var player Player
-	err := row.Scan(&player.ID, &player.Name, &player.Zet, &player.Exp, &player.Score, &player.Logins, &player.CharaID,
+	err := row.Scan(append([]any{&player.ID, &player.Name, &player.Zet, &player.Exp, &player.Score, &player.Logins, &player.CharaID,
 		&player.CoopClassID, &player.CoopClassPoint, &player.VSClassID, &player.VSClassPoint, &player.VSPlays, &player.VSWins,
 		&player.Settings.MasterVolume, &player.Settings.BGMVolume, &player.Settings.MouseHorizontalReverse,
 		&player.Settings.MouseVerticalReverse, &player.Settings.MouseSensitivity, &player.Settings.MouseAcceleration,
-		&player.Settings.KeyMap)
+		&player.Settings.KeyMap}, extra...)...)
 	return player, err
 }
 

@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/store"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/zet"
@@ -16,8 +17,13 @@ func rankingServer(t *testing.T) (*zet.Server, *store.Store) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	return zet.NewServer(s, zet.Catalog{StoreName: "L4DS Emulator"}), s
+	server := zet.NewServer(s, zet.Catalog{StoreName: "L4DS Emulator"})
+	server.SetClock(func() time.Time { return now })
+	return server, s
 }
+
+// now is the rankings' current time, in the middle of a month.
+var now = time.Date(2026, 11, 17, 12, 0, 0, 0, time.Local)
 
 func TestServer_Ranking_NoPlayers_IsEmpty(t *testing.T) {
 	server, _ := rankingServer(t)
@@ -33,8 +39,8 @@ func TestServer_CoopRanking_ListsPlayersByScore(t *testing.T) {
 	server, s := rankingServer(t)
 	low, _ := s.Register("7020392000000001", "Low", 0)
 	high, _ := s.Register("7020392000000002", "High", 0)
-	s.RecordResult(low.ID, store.Result{Score: 10, CoopClassID: 2})
-	s.RecordResult(high.ID, store.Result{Score: 90})
+	s.RecordResult(low.ID, store.Result{Played: now, Score: 10, CoopClassID: 2})
+	s.RecordResult(high.ID, store.Result{Played: now, Score: 90})
 
 	got, _ := server.Ranking(zet.RankingStoreCoop)
 
@@ -49,7 +55,7 @@ func TestServer_CoopRanking_ListsPlayersByScore(t *testing.T) {
 func TestServer_Ranking_PlayerWithACharacter_HasEmptyAvatarSlots(t *testing.T) {
 	server, s := rankingServer(t)
 	player, _ := s.Register("7020392000000001", "Survivor", 3)
-	s.RecordResult(player.ID, store.Result{Score: 10})
+	s.RecordResult(player.ID, store.Result{Played: now, Score: 10})
 
 	got, _ := server.Ranking(zet.RankingNationalCoop)
 
@@ -71,5 +77,20 @@ func TestServer_VersusRanking_ListsVersusPlayersByVersusClassPoints(t *testing.T
 	lines := strings.Split(got, "\n")
 	if lines[2] != "1" || lines[4] != "1" || lines[5] != "25" || lines[7] != "Versus" || lines[9] != "3" {
 		t.Fatalf("Ranking() lines = %q", lines)
+	}
+}
+
+func TestServer_CoopRanking_TotalsThisMonthsScores(t *testing.T) {
+	server, s := rankingServer(t)
+	player, _ := s.Register("7020392000000001", "Survivor", 0)
+	lastMonth := time.Date(2026, 10, 31, 23, 59, 59, 0, time.Local)
+	s.RecordResult(player.ID, store.Result{Played: lastMonth, Score: 1000})
+	s.RecordResult(player.ID, store.Result{Played: now.AddDate(0, 0, -16), Score: 30})
+	s.RecordResult(player.ID, store.Result{Played: now, Score: 40})
+
+	got, _ := server.Ranking(zet.RankingNationalCoop)
+
+	if lines := strings.Split(got, "\n"); lines[2] != "1" || lines[5] != "70" {
+		t.Fatalf("Ranking() lines = %q, want one entry scoring 70", lines)
 	}
 }

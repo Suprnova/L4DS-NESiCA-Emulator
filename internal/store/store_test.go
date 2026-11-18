@@ -256,32 +256,49 @@ func TestRecordResult_ClearedChapter_IsListedOnce(t *testing.T) {
 	}
 }
 
-func TestTopScorers_OrdersPlayersWithAScoreByScore(t *testing.T) {
+var monthStart = time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+
+func TestTopScorersSince_TotalsEachPlayersScoresInThePeriod(t *testing.T) {
 	s := openStore(t)
 	low, _ := s.Register("7020392000000001", "Low", 1)
 	high, _ := s.Register("7020392000000002", "High", 1)
 	s.Register("7020392000000003", "Unplayed", 1)
-	s.RecordResult(low.ID, store.Result{Score: 10})
-	s.RecordResult(high.ID, store.Result{Score: 90})
+	s.RecordResult(low.ID, store.Result{Played: monthStart, Score: 50})
+	s.RecordResult(high.ID, store.Result{Played: monthStart.Add(time.Hour), Score: 40})
+	s.RecordResult(high.ID, store.Result{Played: monthStart.Add(2 * time.Hour), Score: 30})
 
-	got, err := s.TopScorers(10)
+	got, err := s.TopScorersSince(monthStart, 10)
 
-	if err != nil || len(got) != 2 || got[0].ID != high.ID || got[1].ID != low.ID {
-		t.Fatalf("TopScorers() = %+v, %v", got, err)
+	if err != nil || len(got) != 2 || got[0].Player.ID != high.ID || got[0].Score != 70 || got[1].Player.ID != low.ID || got[1].Score != 50 {
+		t.Fatalf("TopScorersSince() = %+v, %v", got, err)
 	}
 }
 
-func TestTopScorers_StopsAtTheLimit(t *testing.T) {
+func TestTopScorersSince_LeavesOutEarlierAndVersusResults(t *testing.T) {
+	s := openStore(t)
+	player := register(t, s)
+	s.RecordResult(player.ID, store.Result{Played: monthStart.Add(-time.Second), Score: 1000})
+	s.RecordResult(player.ID, store.Result{Played: monthStart, Score: 500, VSPlays: 1})
+	s.RecordResult(player.ID, store.Result{Played: monthStart, Score: 20})
+
+	got, _ := s.TopScorersSince(monthStart, 10)
+
+	if len(got) != 1 || got[0].Score != 20 {
+		t.Fatalf("TopScorersSince() = %+v, want a score of 20", got)
+	}
+}
+
+func TestTopScorersSince_StopsAtTheLimit(t *testing.T) {
 	s := openStore(t)
 	for i := range 3 {
 		player, _ := s.Register("702039200000000"+strconv.Itoa(i+1), "Player", 1)
-		s.RecordResult(player.ID, store.Result{Score: 10})
+		s.RecordResult(player.ID, store.Result{Played: monthStart, Score: 10})
 	}
 
-	got, _ := s.TopScorers(2)
+	got, _ := s.TopScorersSince(monthStart, 2)
 
 	if len(got) != 2 {
-		t.Fatalf("TopScorers() returned %d players, want 2", len(got))
+		t.Fatalf("TopScorersSince() returned %d players, want 2", len(got))
 	}
 }
 
