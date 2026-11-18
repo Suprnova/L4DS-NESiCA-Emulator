@@ -3,13 +3,10 @@
 package nesys
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
-	"net/http"
-	"net/http/httptest"
 
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/wire"
 )
@@ -23,16 +20,21 @@ type Config struct {
 	Public         wire.PublicAddress
 	ServiceVersion string
 
-	// HTTP answers the requests the game tunnels through the service. A nil handler makes
-	// every tunnelled request fail with an error code.
-	HTTP http.Handler
+	// Backend answers the tunnelled HTTP requests, the card commands, and the rankings. Without
+	// one, every tunnelled request fails with an error code, card commands go unanswered, and
+	// every ranking is empty.
+	Backend Backend
+}
 
-	// Cards answers the card commands. A nil value leaves them unanswered.
-	Cards Cards
-
-	// Rankings answers the ranking requests. A nil value answers every ranking with an empty
-	// one.
-	Rankings Rankings
+// Backend answers what the game asks of the network: the HTTP requests it tunnels through the
+// service, its card commands, and its ranking requests. The game server implements it in
+// process; the shim implements it with requests to a server.
+type Backend interface {
+	// Post answers a tunnelled HTTP POST to url, a URL on the game's lobby host, with the reply's
+	// status code and body. An error means no reply could be had.
+	Post(url string, body []byte) (status int, reply []byte, err error)
+	Cards
+	Rankings
 }
 
 // Rankings answers the game's ranking requests.
@@ -106,7 +108,7 @@ func respond(config Config, request wire.Frame) []wire.Frame {
 	case wire.RowEventDataList:
 		return []wire.Frame{{Command: wire.RowEventDataReply, Payload: wire.EmptyEventList()}}
 	case wire.HTTPPost:
-		return tunnel(config.HTTP, request.Payload)
+		return tunnel(config.Backend, request.Payload)
 	case wire.GameStart, wire.GameEnd, wire.GameContinue:
 		slog.Info("stub reply", "command", fmt.Sprintf("%#x", uint32(request.Command)), "ignored", "game status bookkeeping; reply layout guessed")
 		return []wire.Frame{{Command: wire.GameStatusReply, Payload: []byte{1, 0, 0, 0}}}
@@ -117,15 +119,15 @@ func respond(config Config, request wire.Frame) []wire.Frame {
 		slog.Info("stub reply", "command", "SHOPPING", "ignored", "purchase; reply layout guessed")
 		return []wire.Frame{{Command: wire.ShoppingReply, Payload: []byte{1, 0, 0, 0}}}
 	case wire.CardUpdate:
-		return updateCard(config.Cards, request.Payload)
+		return updateCard(config.Backend, request.Payload)
 	case wire.RankingData:
-		return ranking(config.Rankings, request.Payload)
+		return ranking(config.Backend, request.Payload)
 	case wire.CardReissueTest:
-		return reissueTest(config.Cards, request.Payload)
+		return reissueTest(config.Backend, request.Payload)
 	case wire.CardInsert:
-		return insertCard(config.Cards, request.Payload)
+		return insertCard(config.Backend, request.Payload)
 	case wire.CardSelect:
-		return selectCard(config.Cards, request.Payload)
+		return selectCard(config.Backend, request.Payload)
 	case wire.ClientEnd:
 		return []wire.Frame{{Command: wire.ClientEndReply}}
 	default:
@@ -137,19 +139,19 @@ func respond(config Config, request wire.Frame) []wire.Frame {
 // tunnelFailure is the error code reported when a tunnelled request cannot be answered.
 const tunnelFailure = 1
 
-func tunnel(handler http.Handler, payload []byte) []wire.Frame {
+func tunnel(backend Backend, payload []byte) []wire.Frame {
 	request, err := wire.ParseHTTPRequest(payload)
 	if err != nil {
 		return nil
 	}
 
 	response := wire.HTTPResponse{Sequence: request.Sequence, ErrorCode: tunnelFailure}
-	if handler != nil {
-		recorder := httptest.NewRecorder()
-		httpRequest := httptest.NewRequest(http.MethodPost, request.URL, bytes.NewReader(request.Body))
-		httpRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		handler.ServeHTTP(recorder, httpRequest)
-		response = wire.HTTPResponse{StatusCode: uint32(recorder.Code), Sequence: request.Sequence, Body: recorder.Body.Bytes()}
+	if backend != nil {
+		if status, body, err := backend.Post(request.URL, request.Body); err != nil {
+			slog.Warn("tunnelled request failed", "url", request.URL, "error", err)
+		} else {
+			response = wire.HTTPResponse{StatusCode: uint32(status), Sequence: request.Sequence, Body: body}
+		}
 	}
 
 	return []wire.Frame{

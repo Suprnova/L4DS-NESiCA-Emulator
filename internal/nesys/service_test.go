@@ -2,9 +2,9 @@ package nesys_test
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
-	"net/http"
 	"testing"
 
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/nesys"
@@ -94,29 +94,57 @@ func httpPostPayload(url, body string) []byte {
 	return payload
 }
 
-func TestServe_HTTPPost_RunsTheHandlerAndRepliesWithItsBody(t *testing.T) {
-	config := testConfig
-	config.HTTP = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.ParseForm()
-		fmt.Fprintf(w, "%s|%s", r.URL.Path, r.PostForm.Get("version"))
-	})
-	game, service := net.Pipe()
-	defer game.Close()
-	go nesys.Serve(service, config)
+// backend is a nesys.Backend made of fakes; post answers the tunnelled requests.
+type backend struct {
+	nesys.Cards
+	nesys.Rankings
+	post func(url string, body []byte) (int, []byte, error)
+}
 
-	start := exchange(t, game, wire.HTTPPost, httpPostPayload("http://lobby/sendversion", "tenpo_id=1&version=1.2604"))
+func (b backend) Post(url string, body []byte) (int, []byte, error) { return b.post(url, body) }
+
+// serveWith serves config with b as its backend and returns the game's end of the pipe.
+func serveWith(t *testing.T, b backend) net.Conn {
+	t.Helper()
+	config := testConfig
+	config.Backend = b
+	game, service := net.Pipe()
+	t.Cleanup(func() { game.Close() })
+	go nesys.Serve(service, config)
+	return game
+}
+
+func TestServe_HTTPPost_RepliesWithTheBackendsReply(t *testing.T) {
+	game := serveWith(t, backend{post: func(url string, body []byte) (int, []byte, error) {
+		return 200, []byte(url + "|" + string(body)), nil
+	}})
+
+	start := exchange(t, game, wire.HTTPPost, httpPostPayload("http://lobby/sendversion", "version=1.2604"))
 	reply, err := wire.ReadFrame(game)
 
 	if start.Command != wire.HTTPStart || err != nil || reply.Command != wire.HTTPReply {
 		t.Fatalf("replies = %+v, %+v, %v", start, reply, err)
 	}
-	if got := string(reply.Payload[0x414:]); got != "/sendversion|1.2604" ||
+	if got := string(reply.Payload[0x414:]); got != "http://lobby/sendversion|version=1.2604" ||
 		binary.LittleEndian.Uint32(reply.Payload[0x404:]) != 200 || binary.LittleEndian.Uint32(reply.Payload[0x40C:]) != 5 {
 		t.Fatalf("reply body = %q, payload head = % X", got, reply.Payload[0x400:0x414])
 	}
 }
 
-func TestServe_HTTPPostWithoutHandler_RepliesWithAnErrorCode(t *testing.T) {
+func TestServe_HTTPPostTheBackendCannotAnswer_RepliesWithAnErrorCode(t *testing.T) {
+	game := serveWith(t, backend{post: func(string, []byte) (int, []byte, error) {
+		return 0, nil, errors.New("server unreachable")
+	}})
+
+	exchange(t, game, wire.HTTPPost, httpPostPayload("http://lobby/login", ""))
+	reply, err := wire.ReadFrame(game)
+
+	if err != nil || binary.LittleEndian.Uint32(reply.Payload[0x408:]) == 0 {
+		t.Fatalf("reply = %+v, %v", reply, err)
+	}
+}
+
+func TestServe_HTTPPostWithoutBackend_RepliesWithAnErrorCode(t *testing.T) {
 	game := startGame(t)
 
 	exchange(t, game, wire.HTTPPost, httpPostPayload("http://lobby/login", ""))
@@ -167,12 +195,8 @@ func (r updateRecorder) Update(cardID string, dataType uint32, data string) erro
 }
 
 func TestServe_CardUpdate_PassesTheDataToTheCards(t *testing.T) {
-	config := testConfig
 	cards := updateRecorder{updates: make(chan string, 1)}
-	config.Cards = cards
-	game, service := net.Pipe()
-	t.Cleanup(func() { game.Close() })
-	go nesys.Serve(service, config)
+	game := serveWith(t, backend{Cards: cards})
 	payload := make([]byte, 32)
 	copy(payload, "7020392000000001")
 	binary.LittleEndian.PutUint32(payload[24:], 3)
@@ -188,11 +212,7 @@ func TestServe_CardUpdate_PassesTheDataToTheCards(t *testing.T) {
 }
 
 func TestServe_CardSelect_RepliesWithTheCardsBody(t *testing.T) {
-	config := testConfig
-	config.Cards = fakeCards{}
-	game, service := net.Pipe()
-	t.Cleanup(func() { game.Close() })
-	go nesys.Serve(service, config)
+	game := serveWith(t, backend{Cards: fakeCards{}})
 	payload := make([]byte, 24)
 	copy(payload, "7020392000000001")
 
@@ -264,11 +284,7 @@ type fakeRankings map[uint32]string
 func (r fakeRankings) Ranking(kind uint32) (string, error) { return r[kind], nil }
 
 func TestServe_RankingData_RepliesWithTheRankingOfTheRequestedKind(t *testing.T) {
-	config := testConfig
-	config.Rankings = fakeRankings{30: "1\n1\n1\nentry\n"}
-	game, service := net.Pipe()
-	t.Cleanup(func() { game.Close() })
-	go nesys.Serve(service, config)
+	game := serveWith(t, backend{Rankings: fakeRankings{30: "1\n1\n1\nentry\n"}})
 	request := []byte("\x1e\x00\x00\x00\x00\x00\x00\x00\x0b\x00\x00\x00tenpo_id=1\x00\x00\x00\x00\x00")
 
 	reply := exchange(t, game, wire.RankingData, request)
@@ -290,11 +306,7 @@ func TestServe_IncomeEnd_RepliesWithPlayerAndStatus(t *testing.T) {
 }
 
 func TestServe_CardInsert_RepliesWithTheCardsBody(t *testing.T) {
-	config := testConfig
-	config.Cards = fakeCards{}
-	game, service := net.Pipe()
-	t.Cleanup(func() { game.Close() })
-	go nesys.Serve(service, config)
+	game := serveWith(t, backend{Cards: fakeCards{}})
 	payload := make([]byte, 32)
 	copy(payload, "7020392000000001")
 	binary.LittleEndian.PutUint32(payload[28:], 5)
@@ -309,11 +321,7 @@ func TestServe_CardInsert_RepliesWithTheCardsBody(t *testing.T) {
 }
 
 func TestServe_CardReissueTest_RepliesWithTheCardsReply(t *testing.T) {
-	config := testConfig
-	config.Cards = fakeCards{}
-	game, service := net.Pipe()
-	t.Cleanup(func() { game.Close() })
-	go nesys.Serve(service, config)
+	game := serveWith(t, backend{Cards: fakeCards{}})
 	payload := make([]byte, 0x14)
 	copy(payload, "7020392000000001")
 

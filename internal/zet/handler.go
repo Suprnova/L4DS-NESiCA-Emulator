@@ -23,6 +23,7 @@ type Server struct {
 	storeName string
 	leave     func(playerID int64, roomID uint32)
 	now       func() time.Time
+	handler   http.Handler
 }
 
 // Catalog is what the server offers players besides their own data.
@@ -45,11 +46,15 @@ type Catalog struct {
 
 // NewServer returns a server that keeps its players in s and offers catalog.
 func NewServer(s *store.Store, catalog Catalog) *Server {
-	return &Server{store: s, levels: catalog.Levels, stages: catalog.Stages, classes: catalog.VersusClasses, schedule: catalog.Schedule, storeName: catalog.StoreName, leave: catalog.Leave, now: time.Now}
+	server := &Server{store: s, levels: catalog.Levels, stages: catalog.Stages, classes: catalog.VersusClasses, schedule: catalog.Schedule, storeName: catalog.StoreName, leave: catalog.Leave, now: time.Now}
+	server.handler = server.routes()
+	return server
 }
 
-// Handler returns the server's HTTP handler.
-func (s *Server) Handler() http.Handler {
+// Handler returns the server's HTTP handler, which logs every request with its body.
+func (s *Server) Handler() http.Handler { return s.handler }
+
+func (s *Server) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /sendversion", reply(successHeader))
 	mux.HandleFunc("POST /version", reply(successHeader))
@@ -68,7 +73,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /select", stub("matching room choice: player_id, room_id"))
 	mux.HandleFunc("POST /leave", s.leaveRoom)
 	mux.HandleFunc("/", unanswered)
-	return mux
+	return logRequests(mux)
 }
 
 // successHeader is the reply header for a request that succeeded: flag, result 1 and API_ID.
