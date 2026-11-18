@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"sync"
 
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/wire"
 )
@@ -24,6 +25,10 @@ type Config struct {
 	// one, every tunnelled request fails with an error code, card commands go unanswered, and
 	// every ranking is empty.
 	Backend Backend
+
+	// Status, when set, decides what a game is told after it connects, and tells connected games
+	// when it changes. Without one, a game is always certified in Store.
+	Status *Status
 }
 
 // Backend answers what the game asks of the network: the HTTP requests it tunnels through the
@@ -63,8 +68,34 @@ type Cards interface {
 }
 
 // Serve answers the game's commands on conn until the game ends the session or the
-// connection fails. It returns nil after a clean ClientEnd.
+// connection fails, and passes on the status's changes meanwhile. It returns nil after a clean
+// ClientEnd.
 func Serve(conn io.ReadWriter, config Config) error {
+	var mu sync.Mutex
+	write := func(frames []wire.Frame) error {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, frame := range frames {
+			if _, err := conn.Write(frame.Encode()); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	if config.Status != nil {
+		changes, unsubscribe := config.Status.subscribe()
+		defer unsubscribe()
+		go func() {
+			for change := range changes {
+				for _, notice := range change {
+					slog.Info("status notice", "id", fmt.Sprintf("%#x", uint32(notice.Command)))
+				}
+				write(change)
+			}
+		}()
+	}
+
 	for {
 		request, err := wire.ReadFrame(conn)
 		if errors.Is(err, io.EOF) {
@@ -76,12 +107,9 @@ func Serve(conn io.ReadWriter, config Config) error {
 
 		slog.Info("command", "id", fmt.Sprintf("%#x", uint32(request.Command)), "payload", len(request.Payload), "head", fmt.Sprintf("%x", request.Payload[:min(len(request.Payload), 32)]))
 
-		for _, reply := range respond(config, request) {
-			if _, err := conn.Write(reply.Encode()); err != nil {
-				return err
-			}
+		if err := write(respond(config, request)); err != nil {
+			return err
 		}
-
 		if request.Command == wire.ClientEnd {
 			return nil
 		}
@@ -93,8 +121,10 @@ func respond(config Config, request wire.Frame) []wire.Frame {
 	case wire.ClientStart:
 		return []wire.Frame{{Command: wire.ClientStartReply}}
 	case wire.ConnectRequest:
-		init := wire.CertInit{Store: config.Store, News: config.News, ServerKey: config.ServerKey}
-		return []wire.Frame{{Command: wire.ConnectReply}, {Command: wire.CertInitNotice, Payload: init.Encode()}}
+		if config.Status != nil {
+			return append([]wire.Frame{{Command: wire.ConnectReply}}, config.Status.Current()...)
+		}
+		return []wire.Frame{{Command: wire.ConnectReply}, CertInit(config.Store, config.News, config.ServerKey)}
 	case wire.DisconnectRequest:
 		return []wire.Frame{{Command: wire.DisconnectReply}}
 	case wire.SetIncomeMode:
