@@ -46,7 +46,7 @@ Run these from the repository.
 4. **Start the server** and wait for `dedicated server ready` before creating a room:
 
    ```
-   go run ./cmd/l4ds-aio -game-dir <game folder> -ds-dir <server tree> -config <configuration file>
+   go run ./cmd/l4ds-aio -ds-dir <server tree> -config <configuration file>
    ```
 
    Players are saved in `l4ds.db` in the current folder (`-db` changes it). `go run ./cmd/l4ds-aio -help` lists every option.

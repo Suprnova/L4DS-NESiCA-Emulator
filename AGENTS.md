@@ -14,7 +14,7 @@ A server for the online services of the arcade game *Left 4 Dead: Survivors* (*L
 | `internal/nesys` | The pipe service: answers the game's NESYS commands and hands card and HTTP requests to the backend. |
 | `internal/zet` | The game server: HTTP endpoints, card lookups, the schedule, and rankings. |
 | `internal/store` | SQLite storage with ordered migrations (`PRAGMA user_version`). |
-| `internal/game` | Readers for the game's own tables (levels, stages, versus classes, and localization tokens). |
+| `internal/game` | The game's rules and build 1.26's tables (levels, versus classes, and stages), checked against an install when `L4DS_GAME_DIR` is set. |
 | `internal/matching` | The UDP matching master and its rooms. |
 | `internal/dedicated` | The pool of dedicated servers that host rooms, watched over RCON. |
 | `internal/rcon` | Source RCON client. |

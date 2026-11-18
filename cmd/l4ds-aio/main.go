@@ -35,7 +35,6 @@ func main() {
 	path := flag.String("pipe", pipe.DefaultPath, "named pipe the game connects to")
 	configPath := flag.String("config", "", "YAML configuration file with the store, the server key and the versus and event schedule (see l4ds.example.yaml); without it the store is \"L4DS Emulator\" in Tokyo and nothing is scheduled")
 	dbPath := flag.String("db", "l4ds.db", "SQLite database holding the players")
-	gameDir := flag.String("game-dir", "", "game install folder; its level table sets player levels, its map table the stage list, and its versus class table the class table versus results need (without it every player is level 1 and a versus round crashes the game when it ends)")
 	masterAddr := flag.String("master", ":27010", "UDP address of the matching master")
 	gameServerAddr := flag.String("game-server", "", "UDP address to log game server queries on, such as :27015; it blocks the game's own listen server there")
 	roomServer := flag.String("room-server", "", "IPv4 address and port of a dedicated server, started by hand, that hosts every new room, such as 127.0.0.2:27020")
@@ -68,14 +67,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	catalog := zet.Catalog{StoreName: settings.Store.Name, Schedule: schedule}
-	if *gameDir != "" {
-		folder, err := game.LoadFolder(*gameDir)
-		if err != nil {
-			slog.Error("load game folder", "game-dir", *gameDir, "error", err)
-			os.Exit(1)
-		}
-		catalog.Levels, catalog.VersusClasses, catalog.Stages = folder.Levels, folder.VersusClasses, folder.Stages
+	catalog := zet.Catalog{
+		Levels:        game.Levels,
+		Stages:        game.Stages,
+		VersusClasses: game.VersusClasses,
+		Schedule:      schedule,
+		StoreName:     settings.Store.Name,
 	}
 
 	players, err := store.Open(*dbPath)

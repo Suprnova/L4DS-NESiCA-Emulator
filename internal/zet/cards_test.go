@@ -147,10 +147,9 @@ func TestServer_Insert_RegisteredCard_ReturnsAnError(t *testing.T) {
 }
 
 func TestServer_Select_ReportsTheLevelFromExperience(t *testing.T) {
-	levels, _ := game.ParseLevelTable(strings.NewReader(`"LevelTable" { "Lv1" { "BaseExp" "0" } "Lv2" { "BaseExp" "150" } }`))
 	s, _ := store.Open(":memory:")
 	t.Cleanup(func() { s.Close() })
-	server := zet.NewServer(s, zet.Catalog{Levels: levels})
+	server := zet.NewServer(s, zet.Catalog{Levels: game.Levels})
 	player, _ := s.Register("7020392000000001", "Survivor", 0)
 	s.RecordResult(player.ID, store.Result{Exp: 150})
 
