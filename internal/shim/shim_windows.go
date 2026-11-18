@@ -1,6 +1,3 @@
-// Package shim serves the game's NESYS pipe in place of Taito's NesysService, with a backend
-// that answers the game's network requests: a server in the same process for l4ds-aio, or a
-// remote server for l4ds-shim.
 package shim
 
 import (
@@ -40,7 +37,7 @@ func Run(ctx context.Context, path string, service nesys.Config) error {
 		listener.Close()
 	}()
 
-	slog.Info("serving the game", "pipe", path, "store", service.Store.ID, "server-key", service.ServerKey)
+	slog.Info("serving the game", "pipe", path, "server-key", service.ServerKey)
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
