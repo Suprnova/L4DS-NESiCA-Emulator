@@ -35,6 +35,9 @@ const Protocol = 1
 // cabinetHeader names the cabinet a request comes from.
 const cabinetHeader = "X-L4DS-Cabinet"
 
+// ErrProtocol reports that a server speaks another version of the protocol.
+var ErrProtocol = errors.New("remote: protocol mismatch")
+
 // ErrUnknownStore reports that the server does not list a store.
 var ErrUnknownStore = errors.New("remote: the server does not list this store")
 

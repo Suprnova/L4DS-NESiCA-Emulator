@@ -90,7 +90,7 @@ func (c *Client) Hello() error {
 		return err
 	}
 	if reply.Protocol != Protocol {
-		return fmt.Errorf("remote: the server speaks protocol %d, this shim %d", reply.Protocol, Protocol)
+		return fmt.Errorf("%w: the server speaks %d, this shim %d", ErrProtocol, reply.Protocol, Protocol)
 	}
 	return nil
 }

@@ -6,12 +6,17 @@ A server for the online services of the arcade game *Left 4 Dead: Survivors* (*L
 
 | Path | What |
 |---|---|
-| `cmd/l4ds-aio` | The all-in-one: pipe service, game server, matching master, and room servers in one process. |
+| `cmd/l4ds-server` | The server a group shares: game server, matching master, room servers, database, and the endpoint shims connect to. |
+| `cmd/l4ds-shim` | Stands in for Taito's NesysService on a cabinet or PC: serves the game's pipe and forwards to a server. |
+| `cmd/l4ds-aio` | The all-in-one: the server and the pipe in one process. |
 | `cmd/l4ds-tree` | Builds, patches, and unpatches private copies of the game ("trees"). |
 | `cmd/srcds-stub` | The `srcds.exe` of a server tree: loads `bin\dedicated.dll` and calls `DedicatedMain`. |
 | `internal/wire` | Byte layouts: pipe framing, startup payloads, the HTTP tunnel, and card requests and replies. |
 | `internal/pipe` | The game's named pipe (Windows only). |
-| `internal/nesys` | The pipe service: answers the game's NESYS commands and hands card and HTTP requests to the backend. |
+| `internal/nesys` | The pipe service: answers the game's NESYS commands and hands card, ranking, and HTTP requests to a `Backend`. |
+| `internal/shim` | Serves the pipe with a backend (Windows only). |
+| `internal/remote` | The shim-to-server protocol: the server's HTTP handler and the shim's client, a `Backend`. |
+| `internal/server` | Starts everything a server runs, for `l4ds-server` and `l4ds-aio`. |
 | `internal/zet` | The game server: HTTP endpoints, card lookups, the schedule, and rankings. |
 | `internal/store` | SQLite storage with ordered migrations (`PRAGMA user_version`). |
 | `internal/game` | The game's rules and build 1.26's tables (levels, versus classes, and stages), checked against an install when `L4DS_GAME_DIR` is set. |
