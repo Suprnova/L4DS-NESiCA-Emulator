@@ -41,7 +41,7 @@ Run these from the repository.
 
    The name is the `server_key` in the configuration file; if you change one, change the other. A DNS server on your network that resolves the name works too, in place of the hosts file.
 
-3. **Configure the server.** Copy `l4ds.example.yaml` and adjust it: the store's name and prefecture, the versus schedule, and the events. Every setting is described in the file. Without a configuration file nothing is scheduled, and versus and the event modes stay unavailable.
+3. **Configure the server.** Copy `l4ds.example.yaml` and adjust it: in the `server` section the store's name and prefecture, the versus schedule, and the events; in the `shim` section the server key. Every setting is described in the file. Without a configuration file nothing is scheduled, and versus and the event modes stay unavailable.
 
 4. **Start the server** and wait for `dedicated server ready` before creating a room:
 

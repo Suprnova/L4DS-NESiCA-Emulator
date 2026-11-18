@@ -1,5 +1,5 @@
-// Package config reads the server's configuration file: the store it presents to the game, the
-// matching server key, and the versus schedule and events.
+// Package config reads the configuration file of the server, the shim, or both: the stores the
+// server serves, its versus schedule and events, and the shim's server, store, and server key.
 package config
 
 import (
@@ -15,21 +15,40 @@ import (
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/zet"
 )
 
-// Config is the server's configuration file.
+// Config is a configuration file. l4ds-server reads its server section, l4ds-shim its shim
+// section, and l4ds-aio both.
 type Config struct {
-	Store Store `yaml:"store"`
-	// ServerKey is the host string the game compares with its table to choose the matching
-	// master and lobby.
-	ServerKey string       `yaml:"server_key"`
-	Versus    []VersusUnit `yaml:"versus"`
-	Events    []Event      `yaml:"events"`
+	Server Server `yaml:"server"`
+	Shim   Shim   `yaml:"shim"`
 }
 
-// Store is the store the game reports itself in.
+// Server configures the server.
+type Server struct {
+	// Listen is the address shims connect to, such as ":8080".
+	Listen string `yaml:"listen"`
+	// Stores are the stores whose cabinets the server serves; a shim naming another is refused.
+	Stores []Store      `yaml:"stores"`
+	Versus []VersusUnit `yaml:"versus"`
+	Events []Event      `yaml:"events"`
+}
+
+// Store is a store the server serves, as its cabinets report it to the game.
 type Store struct {
+	ID   uint32 `yaml:"id"`
 	Name string `yaml:"name"`
 	// Prefecture must not be empty.
 	Prefecture string `yaml:"prefecture"`
+}
+
+// Shim configures the shim.
+type Shim struct {
+	// Server is the base URL of the server, such as "http://192.168.1.10:8080".
+	Server string `yaml:"server"`
+	// Store is the id of the store this cabinet is in, which the server must list.
+	Store uint32 `yaml:"store"`
+	// ServerKey is the host string the game compares with its table to choose the matching
+	// master and lobby; the host must resolve to the server.
+	ServerKey string `yaml:"server_key"`
 }
 
 // VersusUnit is one map of the national versus schedule, offered from Start until End.
@@ -79,13 +98,31 @@ type Event struct {
 	DailyClose string `yaml:"daily_close"`
 }
 
-// Default is the configuration without a file: the emulator's store in Tokyo, the development
-// server key and no schedule, so versus and the events stay unavailable.
+// Default is the configuration without a file: a server on port 8080 serving store 1, the
+// emulator's store in Tokyo, with no schedule, so versus and the events stay unavailable; and a
+// shim in store 1 that reaches that server on the same machine with the development server key.
 func Default() Config {
 	return Config{
-		Store:     Store{Name: "L4DS Emulator", Prefecture: "Tokyo"},
-		ServerKey: "dev.game.zet.square-enix.co.jp",
+		Server: Server{
+			Listen: ":8080",
+			Stores: []Store{{ID: 1, Name: "L4DS Emulator", Prefecture: "Tokyo"}},
+		},
+		Shim: Shim{
+			Server:    "http://127.0.0.1:8080",
+			Store:     1,
+			ServerKey: "dev.game.zet.square-enix.co.jp",
+		},
 	}
+}
+
+// Store returns the store the server lists under id.
+func (s Server) Store(id uint32) (Store, bool) {
+	for _, store := range s.Stores {
+		if store.ID == id {
+			return store, true
+		}
+	}
+	return Store{}, false
 }
 
 // Load reads the configuration file at path. Settings the file leaves out keep their
@@ -103,13 +140,30 @@ func Load(path string) (Config, error) {
 	if err := loader.Load(&config); err != nil && !errors.Is(err, io.EOF) {
 		return Config{}, fmt.Errorf("%s: %w", path, err)
 	}
-	if config.Store.Prefecture == "" {
-		return Config{}, fmt.Errorf("%s: store.prefecture must not be empty", path)
-	}
-	if _, err := config.Schedule(); err != nil {
+	if err := config.Server.check(); err != nil {
 		return Config{}, fmt.Errorf("%s: %w", path, err)
 	}
 	return config, nil
+}
+
+// check reports the first problem with the server section: no stores, a store id listed twice, a
+// store without a prefecture, or a schedule entry the game cannot take.
+func (s Server) check() error {
+	if len(s.Stores) == 0 {
+		return errors.New("server.stores must list at least one store")
+	}
+	ids := map[uint32]bool{}
+	for _, store := range s.Stores {
+		if ids[store.ID] {
+			return fmt.Errorf("store %d is listed twice", store.ID)
+		}
+		ids[store.ID] = true
+		if store.Prefecture == "" {
+			return fmt.Errorf("store %d: prefecture must not be empty", store.ID)
+		}
+	}
+	_, err := s.Schedule()
+	return err
 }
 
 // difficulties maps difficulty names to the game's difficulty plus 1.
@@ -119,9 +173,9 @@ var difficulties = map[string]int{"easy": 1, "normal": 2, "advanced": 3, "expert
 var eventTypes = map[string]int{"national": zet.EventNational, "store": zet.EventStore, "national_ex": zet.EventNationalEX, "store_ex": zet.EventStoreEX}
 
 // Schedule returns the versus units and events as the game server offers them.
-func (c Config) Schedule() (zet.Schedule, error) {
+func (s Server) Schedule() (zet.Schedule, error) {
 	var schedule zet.Schedule
-	for _, unit := range c.Versus {
+	for _, unit := range s.Versus {
 		difficulty, err := lookup("versus unit", unit.ID, "difficulty", difficulties, unit.Difficulty)
 		if err != nil {
 			return zet.Schedule{}, err
@@ -132,7 +186,7 @@ func (c Config) Schedule() (zet.Schedule, error) {
 			Start: unit.Start, End: unit.End,
 		})
 	}
-	for _, event := range c.Events {
+	for _, event := range s.Events {
 		difficulty, err := lookup("event", event.ID, "difficulty", difficulties, event.Difficulty)
 		if err != nil {
 			return zet.Schedule{}, err
