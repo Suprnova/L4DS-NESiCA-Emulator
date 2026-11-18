@@ -1,10 +1,11 @@
-// Package store persists players and their progress in SQLite.
+// Package store persists players, their cards, and their results in SQLite.
 package store
 
 import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -41,6 +42,60 @@ var migrations = []string{
 	`ALTER TABLE players ADD COLUMN key_map INTEGER NOT NULL DEFAULT 1`,
 	`ALTER TABLE players ADD COLUMN vs_plays INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE players ADD COLUMN vs_wins INTEGER NOT NULL DEFAULT 0`,
+	// Cards move to their own table, so a player can outlive a card (reissues and takeovers).
+	// SQLite cannot drop a UNIQUE column, so players is rebuilt without card_id.
+	`CREATE TABLE cards (
+		card_id   TEXT    PRIMARY KEY,
+		player_id INTEGER NOT NULL REFERENCES players (id)
+	);
+	INSERT INTO cards (card_id, player_id) SELECT card_id, id FROM players;
+	CREATE TABLE players_new (
+		id                       INTEGER PRIMARY KEY,
+		name                     TEXT    NOT NULL,
+		zet                      INTEGER NOT NULL DEFAULT 0,
+		exp                      INTEGER NOT NULL DEFAULT 0,
+		score                    INTEGER NOT NULL DEFAULT 0,
+		logins                   INTEGER NOT NULL DEFAULT 0,
+		chara_id                 INTEGER NOT NULL DEFAULT 0,
+		coop_class_id            INTEGER NOT NULL DEFAULT 1,
+		coop_class_point         INTEGER NOT NULL DEFAULT 0,
+		vs_class_id              INTEGER NOT NULL DEFAULT 1,
+		vs_class_point           INTEGER NOT NULL DEFAULT 0,
+		vs_plays                 INTEGER NOT NULL DEFAULT 0,
+		vs_wins                  INTEGER NOT NULL DEFAULT 0,
+		master_volume            INTEGER NOT NULL DEFAULT 5,
+		bgm_volume               INTEGER NOT NULL DEFAULT 5,
+		mouse_horizontal_reverse INTEGER NOT NULL DEFAULT 0,
+		mouse_vertical_reverse   INTEGER NOT NULL DEFAULT 0,
+		mouse_sensitivity        INTEGER NOT NULL DEFAULT 3,
+		mouse_acceleration       INTEGER NOT NULL DEFAULT 0,
+		key_map                  INTEGER NOT NULL DEFAULT 1
+	);
+	INSERT INTO players_new SELECT id, name, zet, exp, score, logins, chara_id,
+		coop_class_id, coop_class_point, vs_class_id, vs_class_point, vs_plays, vs_wins,
+		master_volume, bgm_volume, mouse_horizontal_reverse, mouse_vertical_reverse,
+		mouse_sensitivity, mouse_acceleration, key_map FROM players;
+	DROP TABLE players;
+	ALTER TABLE players_new RENAME TO players`,
+	`CREATE TABLE results (
+		id               INTEGER PRIMARY KEY,
+		player_id        INTEGER NOT NULL REFERENCES players (id),
+		played_at        INTEGER NOT NULL,
+		game_mode        INTEGER NOT NULL,
+		stage_id         INTEGER NOT NULL,
+		chapter_id       INTEGER NOT NULL,
+		cleared          INTEGER NOT NULL,
+		zet              INTEGER NOT NULL,
+		exp              INTEGER NOT NULL,
+		score            INTEGER NOT NULL,
+		coop_class_point INTEGER NOT NULL,
+		vs_class_point   INTEGER NOT NULL,
+		coop_class_id    INTEGER NOT NULL,
+		vs_class_id      INTEGER NOT NULL,
+		vs_plays         INTEGER NOT NULL,
+		vs_wins          INTEGER NOT NULL
+	);
+	CREATE INDEX results_by_time ON results (played_at)`,
 }
 
 // settingsColumns lists the columns holding a player's [Settings], in field order.
@@ -60,7 +115,6 @@ var ErrNoPlayer = errors.New("store: no such player")
 // lowest class (F5 in co-op, F in versus).
 type Player struct {
 	ID             int64
-	CardID         string
 	Name           string
 	Zet            int64
 	Exp            int64
@@ -91,11 +145,17 @@ type Settings struct {
 // DefaultSettings are the settings a new player starts with.
 var DefaultSettings = Settings{MasterVolume: 5, BGMVolume: 5, MouseSensitivity: 3, KeyMap: 1}
 
-// Result is what a finished chapter adds to a player's totals. The game computes the classes
-// itself: CoopClassID and VSClassID are the player's classes after the chapter (0 keeps the
-// stored class), and CoopClassPoint and VSClassPoint are the changes in co-op and versus class
-// points, which may be negative. VSPlays and VSWins add to the player's versus record.
+// Result is a finished chapter: when it was played, in which game mode, stage and chapter, and
+// what it adds to the player's totals. The game computes the classes itself: CoopClassID and
+// VSClassID are the player's classes after the chapter (0 keeps the stored class), and
+// CoopClassPoint and VSClassPoint are the changes in co-op and versus class points, which may be
+// negative. VSPlays and VSWins add to the player's versus record. Played is kept to the second.
 type Result struct {
+	Played         time.Time
+	GameMode       int64
+	StageID        int64
+	ChapterID      int64
+	Cleared        bool
 	Zet            int64
 	Exp            int64
 	Score          int64
@@ -105,9 +165,6 @@ type Result struct {
 	VSClassID      int64
 	VSPlays        int64
 	VSWins         int64
-	StageID        int64
-	ChapterID      int64
-	Cleared        bool
 }
 
 // Clear is a chapter a player has cleared.
@@ -122,9 +179,9 @@ type Store struct {
 }
 
 // Open opens the database at path, creating it and applying any missing schema changes. Use
-// ":memory:" for a database that lives as long as the store.
+// ":memory:" for a database that lives as long as the store. Foreign keys are enforced.
 func Open(path string) (*Store, error) {
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", path+"?_pragma=foreign_keys(1)")
 	if err != nil {
 		return nil, err
 	}
@@ -137,18 +194,36 @@ func Open(path string) (*Store, error) {
 	return &Store{db: db}, nil
 }
 
+// migrate applies the missing migrations with foreign keys off, as rebuilding a table needs, and
+// checks the keys before turning them back on.
 func migrate(db *sql.DB) error {
 	var applied int
 	if err := db.QueryRow(`PRAGMA user_version`).Scan(&applied); err != nil {
 		return err
 	}
+	if applied == len(migrations) {
+		return nil
+	}
 
+	if _, err := db.Exec(`PRAGMA foreign_keys = OFF`); err != nil {
+		return err
+	}
 	for i := applied; i < len(migrations); i++ {
 		if err := applyMigration(db, i); err != nil {
 			return fmt.Errorf("store: migration %d: %w", i+1, err)
 		}
 	}
-	return nil
+	rows, err := db.Query(`PRAGMA foreign_key_check`)
+	if err != nil {
+		return err
+	}
+	violated := rows.Next()
+	rows.Close()
+	if violated {
+		return errors.New("store: migrated database has rows whose foreign keys point nowhere")
+	}
+	_, err = db.Exec(`PRAGMA foreign_keys = ON`)
+	return err
 }
 
 // applyMigration applies migration i and records it in one transaction, so a failure leaves
@@ -172,25 +247,45 @@ func applyMigration(db *sql.DB, i int) error {
 // Close closes the database.
 func (s *Store) Close() error { return s.db.Close() }
 
+// byCard selects the player registered to a card.
+const byCard = `id = (SELECT player_id FROM cards WHERE card_id = ?)`
+
 // PlayerByCard returns the player registered to a card, or ErrNotRegistered.
 func (s *Store) PlayerByCard(cardID string) (Player, error) {
-	player, err := s.player(`card_id = ?`, cardID)
+	player, err := s.player(byCard, cardID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Player{}, ErrNotRegistered
 	}
 	return player, err
 }
 
-// Register creates the player for a card, or returns ErrAlreadyRegistered.
+// Register creates a player and registers a card to them, or returns ErrAlreadyRegistered.
 func (s *Store) Register(cardID, name string, charaID int64) (Player, error) {
-	outcome, err := s.db.Exec(`INSERT OR IGNORE INTO players (card_id, name, chara_id) VALUES (?, ?, ?)`, cardID, name, charaID)
+	tx, err := s.db.Begin()
 	if err != nil {
 		return Player{}, err
 	}
-	if rows, _ := outcome.RowsAffected(); rows == 0 {
+	defer tx.Rollback()
+
+	created, err := tx.Exec(`INSERT INTO players (name, chara_id) VALUES (?, ?)`, name, charaID)
+	if err != nil {
+		return Player{}, err
+	}
+	id, err := created.LastInsertId()
+	if err != nil {
+		return Player{}, err
+	}
+	card, err := tx.Exec(`INSERT OR IGNORE INTO cards (card_id, player_id) VALUES (?, ?)`, cardID, id)
+	if err != nil {
+		return Player{}, err
+	}
+	if rows, _ := card.RowsAffected(); rows == 0 {
 		return Player{}, ErrAlreadyRegistered
 	}
-	return s.player(`card_id = ?`, cardID)
+	if err := tx.Commit(); err != nil {
+		return Player{}, err
+	}
+	return s.Player(id)
 }
 
 // Player returns the player with the given id, or ErrNoPlayer.
@@ -202,8 +297,8 @@ func (s *Store) Player(id int64) (Player, error) {
 	return player, err
 }
 
-// RecordResult adds a finished chapter to a player's totals, and to their cleared chapters
-// when the chapter was cleared.
+// RecordResult stores a finished chapter, adds it to the player's totals, and adds the chapter
+// to their cleared chapters when it was cleared.
 func (s *Store) RecordResult(playerID int64, result Result) error {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -226,6 +321,12 @@ func (s *Store) RecordResult(playerID int64, result Result) error {
 		return ErrNoPlayer
 	}
 
+	if _, err := tx.Exec(`INSERT INTO results (player_id, `+resultColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		playerID, result.Played.Unix(), result.GameMode, result.StageID, result.ChapterID, result.Cleared,
+		result.Zet, result.Exp, result.Score, result.CoopClassPoint, result.VSClassPoint, result.CoopClassID, result.VSClassID,
+		result.VSPlays, result.VSWins); err != nil {
+		return err
+	}
 	if result.Cleared {
 		if _, err := tx.Exec(`INSERT OR IGNORE INTO chapter_clears (player_id, stage_id, chapter_id) VALUES (?, ?, ?)`,
 			playerID, result.StageID, result.ChapterID); err != nil {
@@ -233,6 +334,33 @@ func (s *Store) RecordResult(playerID int64, result Result) error {
 		}
 	}
 	return tx.Commit()
+}
+
+// resultColumns lists the columns of a result row after its player, in [Result] field order.
+const resultColumns = `played_at, game_mode, stage_id, chapter_id, cleared, zet, exp, score,
+	coop_class_point, vs_class_point, coop_class_id, vs_class_id, vs_plays, vs_wins`
+
+// Results returns a player's results, oldest first.
+func (s *Store) Results(playerID int64) ([]Result, error) {
+	rows, err := s.db.Query(`SELECT `+resultColumns+` FROM results WHERE player_id = ? ORDER BY played_at, id`, playerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []Result
+	for rows.Next() {
+		var result Result
+		var played int64
+		if err := rows.Scan(&played, &result.GameMode, &result.StageID, &result.ChapterID, &result.Cleared,
+			&result.Zet, &result.Exp, &result.Score, &result.CoopClassPoint, &result.VSClassPoint,
+			&result.CoopClassID, &result.VSClassID, &result.VSPlays, &result.VSWins); err != nil {
+			return nil, err
+		}
+		result.Played = time.Unix(played, 0)
+		results = append(results, result)
+	}
+	return results, rows.Err()
 }
 
 // Clears returns the chapters a player has cleared, ordered by stage and chapter.
@@ -256,14 +384,14 @@ func (s *Store) Clears(playerID int64) ([]Clear, error) {
 
 // UpdateSettings replaces the settings of the player registered to a card.
 func (s *Store) UpdateSettings(cardID string, settings Settings) error {
-	return s.updatePlayer(`UPDATE players SET (`+settingsColumns+`) = (?, ?, ?, ?, ?, ?, ?) WHERE card_id = ?`,
+	return s.updatePlayer(`UPDATE players SET (`+settingsColumns+`) = (?, ?, ?, ?, ?, ?, ?) WHERE `+byCard,
 		settings.MasterVolume, settings.BGMVolume, settings.MouseHorizontalReverse, settings.MouseVerticalReverse,
 		settings.MouseSensitivity, settings.MouseAcceleration, settings.KeyMap, cardID)
 }
 
 // Rename changes the name of the player registered to a card.
 func (s *Store) Rename(cardID, name string) error {
-	return s.updatePlayer(`UPDATE players SET name = ? WHERE card_id = ?`, name, cardID)
+	return s.updatePlayer(`UPDATE players SET name = ? WHERE `+byCard, name, cardID)
 }
 
 // RecordLogin counts one more login for a player.
@@ -294,12 +422,12 @@ func (s *Store) TopVersusPlayers(limit int) ([]Player, error) {
 }
 
 // playerColumns lists the columns scanPlayer reads, in order.
-const playerColumns = `id, card_id, name, zet, exp, score, logins, chara_id,
+const playerColumns = `id, name, zet, exp, score, logins, chara_id,
 	coop_class_id, coop_class_point, vs_class_id, vs_class_point, vs_plays, vs_wins, ` + settingsColumns
 
 func scanPlayer(row interface{ Scan(...any) error }) (Player, error) {
 	var player Player
-	err := row.Scan(&player.ID, &player.CardID, &player.Name, &player.Zet, &player.Exp, &player.Score, &player.Logins, &player.CharaID,
+	err := row.Scan(&player.ID, &player.Name, &player.Zet, &player.Exp, &player.Score, &player.Logins, &player.CharaID,
 		&player.CoopClassID, &player.CoopClassPoint, &player.VSClassID, &player.VSClassPoint, &player.VSPlays, &player.VSWins,
 		&player.Settings.MasterVolume, &player.Settings.BGMVolume, &player.Settings.MouseHorizontalReverse,
 		&player.Settings.MouseVerticalReverse, &player.Settings.MouseSensitivity, &player.Settings.MouseAcceleration,

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/game"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/store"
@@ -123,12 +124,13 @@ func svp(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(successHeader + r.PostFormValue("player_id") + "\n"))
 }
 
-// result adds the finished chapter to the player's totals and answers with a success header.
-// class_point is the change in the player's class points: versus points when game_mode, the
-// matching mode, is a versus mode (7 to 10), co-op points otherwise. A versus result also counts
-// a versus play, and a win when vs_you_win is 1. A cleared chapter counts towards the player's
-// stage progress only when campaign_flag is 1, which the game sets for co-op and single play
-// (modes 1 and 5), not for events or versus. A guest's result is not kept.
+// result stores the finished chapter with the time it arrived, adds it to the player's totals,
+// and answers with a success header. class_point is the change in the player's class points:
+// versus points when game_mode, the matching mode, is a versus mode (7 to 10), co-op points
+// otherwise. A versus result also counts a versus play, and a win when vs_you_win is 1. A cleared
+// chapter counts towards the player's stage progress only when campaign_flag is 1, which the game
+// sets for co-op and single play (modes 1 and 5), not for events or versus. A guest's result is
+// not kept.
 func (s *Server) result(w http.ResponseWriter, r *http.Request) {
 	defer w.Write([]byte(successHeader))
 	playerID := formInt(r, "player_id")
@@ -137,17 +139,18 @@ func (s *Server) result(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result := store.Result{
+		Played:      time.Now(),
+		GameMode:    formInt(r, "game_mode"),
+		StageID:     formInt(r, "stage_id"),
+		ChapterID:   formInt(r, "chapter_id"),
+		Cleared:     formInt(r, "clear_flag") == 1 && formInt(r, "campaign_flag") == 1,
 		Zet:         formInt(r, "zet"),
 		Exp:         formInt(r, "exp"),
 		Score:       formInt(r, "TOTAL_SCORE"),
 		CoopClassID: formInt(r, "coop_class_id"),
 		VSClassID:   formInt(r, "vs_class_id"),
-
-		StageID:   formInt(r, "stage_id"),
-		ChapterID: formInt(r, "chapter_id"),
-		Cleared:   formInt(r, "clear_flag") == 1 && formInt(r, "campaign_flag") == 1,
 	}
-	if mode := formInt(r, "game_mode"); mode >= 7 && mode <= 10 {
+	if result.GameMode >= 7 && result.GameMode <= 10 {
 		result.VSClassPoint = formInt(r, "class_point")
 		result.VSPlays, result.VSWins = 1, formInt(r, "vs_you_win")
 	} else {

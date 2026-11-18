@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strconv"
 	"testing"
+	"time"
 
 	_ "modernc.org/sqlite"
 
@@ -203,6 +204,40 @@ func TestOpen_DatabaseFromAnEarlierSchema_IsMigrated(t *testing.T) {
 		t.Fatalf("player = %+v, err = %v", player, err)
 	}
 	s.Close()
+}
+
+func TestOpen_DatabaseWithCardsOnPlayers_MovesThemToTheirOwnTable(t *testing.T) {
+	path := t.TempDir() + "/cards.db"
+	s, _ := store.Open(path)
+	player, _ := s.Register(card, "Mika", 3)
+	s.RecordResult(player.ID, store.Result{StageID: 1, ChapterID: 1, Cleared: true})
+	s.Close()
+	old, _ := sql.Open("sqlite", path)
+	old.Exec(`DROP TABLE results; DROP TABLE cards; ALTER TABLE players ADD COLUMN card_id TEXT; UPDATE players SET card_id = '` + card + `'; PRAGMA user_version = 17`)
+	old.Close()
+
+	s, err := store.Open(path)
+
+	found, _ := s.PlayerByCard(card)
+	clears, _ := s.Clears(player.ID)
+	if err != nil || found.ID != player.ID || found.Name != "Mika" || len(clears) != 1 {
+		t.Fatalf("player = %+v, clears = %v, err = %v", found, clears, err)
+	}
+	s.Close()
+}
+
+func TestRecordResult_StoresTheResult(t *testing.T) {
+	s := openStore(t)
+	player := register(t, s)
+	played := time.Date(2026, 11, 17, 21, 30, 15, 0, time.UTC)
+	result := store.Result{Played: played, GameMode: 7, StageID: 1, ChapterID: 1, Score: 900, VSClassPoint: -10, VSPlays: 1, VSWins: 1}
+
+	err := s.RecordResult(player.ID, result)
+
+	results, _ := s.Results(player.ID)
+	if err != nil || len(results) != 1 || !results[0].Played.Equal(played) || results[0].GameMode != 7 || results[0].Score != 900 || results[0].VSClassPoint != -10 {
+		t.Fatalf("Results() = %+v, err = %v", results, err)
+	}
 }
 
 func TestRecordResult_ClearedChapter_IsListedOnce(t *testing.T) {
