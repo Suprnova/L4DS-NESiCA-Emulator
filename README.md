@@ -41,7 +41,7 @@ Run these from the repository.
 
    The name is the `server_key` in the configuration file; if you change one, change the other. A DNS server on your network that resolves the name works too, in place of the hosts file.
 
-3. **Configure the server.** Copy `l4ds.example.yaml` and adjust it: in the `server` section the store's name and prefecture, the versus schedule, and the events; in the `shim` section the server key. Every setting is described in the file. Without a configuration file nothing is scheduled, and versus and the event modes stay unavailable.
+3. **Configure the server.** Copy `l4ds.example.yaml` and adjust it: in the `server` section the store's name and prefecture, the versus schedule, and the events; in the `shim` section the server key, the netcon port, and your card keys. Every setting is described in the file. Without a configuration file nothing is scheduled, and versus and the event modes stay unavailable.
 
 4. **Start the server** and wait for `dedicated server ready` before creating a room:
 
@@ -54,23 +54,16 @@ Run these from the repository.
 5. **Start the game** from the client tree:
 
    ```
-   <client tree>\left4dead2.exe -console -arcadeIO_InitializeSkip -game left4dead2 -language japanese -windowed
+   <client tree>\left4dead2.exe -console -arcadeIO_InitializeSkip -game left4dead2 -language japanese -windowed -netconport 2121
    ```
 
-6. **Scan a card.** Open the console and put a card on the reader. Any 16-digit number is a card; a new one starts registration. The card is read once, then taken off the reader again:
+   `-netconport` opens the port card keys send cards to; it must match `netcon` in the `shim` section.
+
+6. **Scan a card.** Any 16-digit number is a card; a new one starts registration. Press a card key from the `shim` section's `cards` while the game shows its title or card screen: the card is read once, then taken off the reader again. Without card keys, put a card on the reader from the game's console:
 
    ```
    change_debug_dummyCardID <16-digit card number>
    ```
-
-   To make that shorter, give your cards aliases in the client tree's `left4dead2\cfg\autoexec.cfg`, which the game runs at startup, and type the alias instead:
-
-   ```
-   alias card1 "change_debug_dummyCardID <16-digit card number>"
-   alias card2 "change_debug_dummyCardID <another card number>"
-   ```
-
-   Keys bound to these commands do not work on the title and mode select screens, where the card is read, so type them in the console.
 
 ## Trees
 

@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"net"
 
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/config"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/hotkey"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/nesys"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/pipe"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/wire"
@@ -47,6 +49,30 @@ func Run(ctx context.Context, path string, service nesys.Config) error {
 			return err
 		}
 		go serve(conn, service)
+	}
+}
+
+// RunCardKeys puts each card on its game's card reader when its key is pressed, until ctx is
+// done. A key another program holds leaves every card key off, which it logs.
+func RunCardKeys(ctx context.Context, cards []config.CardKey) {
+	if len(cards) == 0 {
+		return
+	}
+	keys := make([]hotkey.Key, len(cards))
+	for i, card := range cards {
+		keys[i] = card.Key
+		slog.Info("card key", "key", card.Key, "card", card.Card, "netcon", card.Netcon)
+	}
+	err := hotkey.Listen(ctx, keys, func(i int) {
+		card := cards[i]
+		if err := PutCard(card.Netcon, card.Card); err != nil {
+			slog.Warn("card not put on the reader", "card", card.Card, "netcon", card.Netcon, "error", err)
+			return
+		}
+		slog.Info("card put on the reader", "card", card.Card, "netcon", card.Netcon)
+	})
+	if err != nil {
+		slog.Error("card keys are off", "error", err)
 	}
 }
 

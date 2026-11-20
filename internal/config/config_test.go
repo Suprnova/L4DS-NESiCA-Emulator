@@ -3,12 +3,14 @@ package config_test
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/config"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/hotkey"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/zet"
 )
 
@@ -25,7 +27,7 @@ func TestLoad_EmptyFile_KeepsTheDefaults(t *testing.T) {
 	got, err := config.Load(writeConfig(t, ""))
 
 	want := config.Default()
-	if err != nil || got.Shim != want.Shim || got.Server.Listen != want.Server.Listen || !slices.Equal(got.Server.Stores, want.Server.Stores) ||
+	if err != nil || !reflect.DeepEqual(got.Shim, want.Shim) || got.Server.Listen != want.Server.Listen || !slices.Equal(got.Server.Stores, want.Server.Stores) ||
 		len(got.Server.Versus) != 0 || len(got.Server.Events) != 0 {
 		t.Fatalf("Load() = %+v, %v", got, err)
 	}
@@ -58,7 +60,7 @@ shim:
 		Server: config.Server{Listen: ":9000", Stores: []config.Store{{ID: 7, Name: "Arcade", Prefecture: "Osaka"}}},
 		Shim:   config.Shim{Server: "http://10.0.0.2:9000", Store: 7, ServerKey: "example.test"},
 	}
-	if err != nil || got.Shim != want.Shim || got.Server.Listen != want.Server.Listen || !slices.Equal(got.Server.Stores, want.Server.Stores) {
+	if err != nil || !reflect.DeepEqual(got.Shim, want.Shim) || got.Server.Listen != want.Server.Listen || !slices.Equal(got.Server.Stores, want.Server.Stores) {
 		t.Fatalf("Load() = %+v, %v", got, err)
 	}
 }
@@ -195,5 +197,61 @@ func TestLoad_BadDailyTime_IsAnError(t *testing.T) {
 
 	if err == nil || !strings.Contains(err.Error(), "event 2") {
 		t.Fatalf("Load() err = %v", err)
+	}
+}
+
+func TestLoad_CardKeys_TakeTheShimsNetconPortUnlessTheyHaveTheirOwn(t *testing.T) {
+	path := writeConfig(t, `shim:
+  netcon: 2121
+  cards:
+    - key: F5
+      card: "7020392000000001"
+    - key: ctrl+F6
+      card: "7020392000000002"
+      netcon: 2122
+`)
+
+	got, err := config.Load(path)
+
+	f5, _ := hotkey.Parse("F5")
+	f6, _ := hotkey.Parse("Ctrl+F6")
+	want := []config.CardKey{{Key: f5, Card: "7020392000000001", Netcon: 2121}, {Key: f6, Card: "7020392000000002", Netcon: 2122}}
+	if err != nil || !slices.Equal(got.Shim.Cards, want) {
+		t.Fatalf("Load() = %+v, %v", got.Shim.Cards, err)
+	}
+}
+
+func TestLoad_BadCardKeys_AreErrors(t *testing.T) {
+	cases := map[string]string{
+		"no port": `
+  cards:
+    - {key: F5, card: "7020392000000001"}`,
+		"short card": `
+  netcon: 2121
+  cards:
+    - {key: F5, card: "702039200000001"}`,
+		"no key": `
+  netcon: 2121
+  cards:
+    - {card: "7020392000000001"}`,
+		"unknown key": `
+  netcon: 2121
+  cards:
+    - {key: Enter, card: "7020392000000001"}`,
+		"key twice": `
+  netcon: 2121
+  cards:
+    - {key: F5, card: "7020392000000001"}
+    - {key: f5, card: "7020392000000002"}`,
+		"port too big": `
+  cards:
+    - {key: F5, card: "7020392000000001", netcon: 70000}`,
+	}
+	for name, cards := range cases {
+		_, err := config.Load(writeConfig(t, "shim:"+cards))
+
+		if err == nil {
+			t.Errorf("%s: Load() succeeded", name)
+		}
 	}
 }

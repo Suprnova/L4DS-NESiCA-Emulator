@@ -1,5 +1,5 @@
 // Package config reads the configuration file of the server, the shim, or both: the stores the
-// server serves, its versus schedule and events, and the shim's server, store, and server key.
+// server serves, its versus schedule and events, and the shim's server, store, server key, and card keys.
 package config
 
 import (
@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"go.yaml.in/yaml/v4"
 
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/hotkey"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/zet"
 )
 
@@ -49,6 +51,21 @@ type Shim struct {
 	// ServerKey is the host string the game compares with its table to choose the matching
 	// master and lobby; the host must resolve to the server.
 	ServerKey string `yaml:"server_key"`
+	// Netcon is the port the game on this machine takes console commands on (its -netconport),
+	// which card keys send to. 0 means none.
+	Netcon int `yaml:"netcon"`
+	// Cards are keys that put a card on a game's card reader, for machines without one.
+	Cards []CardKey `yaml:"cards"`
+}
+
+// CardKey is a key that puts a card on the card reader of a game on this machine, through the
+// game's netcon port, whichever program has the focus. The game reads it at its next card scan.
+type CardKey struct {
+	Key hotkey.Key `yaml:"key"`
+	// Card is the card's 16-digit number.
+	Card string `yaml:"card"`
+	// Netcon is the netcon port of the game the card goes to. Left out, it is the shim's.
+	Netcon int `yaml:"netcon"`
 }
 
 // VersusUnit is one map of the national versus schedule, offered from Start until End.
@@ -143,7 +160,34 @@ func Load(path string) (Config, error) {
 	if err := config.Server.check(); err != nil {
 		return Config{}, fmt.Errorf("%s: %w", path, err)
 	}
+	if err := config.Shim.resolve(); err != nil {
+		return Config{}, fmt.Errorf("%s: %w", path, err)
+	}
 	return config, nil
+}
+
+// resolve gives each card key its netcon port, and reports the first card key that has no port,
+// a card number that is not 16 digits, or a key given twice.
+func (s *Shim) resolve() error {
+	keys := map[hotkey.Key]bool{}
+	for i := range s.Cards {
+		card := &s.Cards[i]
+		if card.Netcon == 0 {
+			card.Netcon = s.Netcon
+		}
+		switch {
+		case card.Key == hotkey.Key{}:
+			return fmt.Errorf("shim.cards: card %s has no key", card.Card)
+		case keys[card.Key]:
+			return fmt.Errorf("shim.cards: key %s is given twice", card.Key)
+		case len(card.Card) != 16 || strings.Trim(card.Card, "0123456789") != "":
+			return fmt.Errorf("shim.cards: card %q is not 16 digits", card.Card)
+		case card.Netcon <= 0 || card.Netcon > 65535:
+			return fmt.Errorf("shim.cards: card %s needs a netcon port, its own or shim.netcon", card.Card)
+		}
+		keys[card.Key] = true
+	}
+	return nil
 }
 
 // check reports the first problem with the server section: no stores, a store id listed twice, a

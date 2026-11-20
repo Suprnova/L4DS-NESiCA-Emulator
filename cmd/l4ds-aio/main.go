@@ -50,6 +50,7 @@ func run() error {
 		s.Close()
 	}()
 
+	go shim.RunCardKeys(ctx, settings.Shim.Cards)
 	cabinet := wire.StoreInfo{ID: store.ID, Name: store.Name, Prefecture: store.Prefecture}
 	return shim.Run(ctx, *path, shim.Service(cabinet, settings.Shim.ServerKey, s.Backend))
 }

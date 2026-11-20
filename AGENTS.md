@@ -14,7 +14,8 @@ A server for the online services of the arcade game *Left 4 Dead: Survivors* (*L
 | `internal/wire` | Byte layouts: pipe framing, startup payloads, the HTTP tunnel, and card requests and replies. |
 | `internal/pipe` | The game's named pipe (Windows only). |
 | `internal/nesys` | The pipe service: answers the game's NESYS commands and hands card, ranking, and HTTP requests to a `Backend`. |
-| `internal/shim` | Serves the pipe with a backend (Windows only). |
+| `internal/shim` | Serves the pipe with a backend (Windows only), and puts cards on the game's reader through its netcon port. |
+| `internal/hotkey` | Key combinations, and system-wide keys on Windows (the shim's card keys). |
 | `internal/remote` | The shim-to-server protocol: the server's HTTP handler and the shim's client, a `Backend`. |
 | `internal/server` | Starts everything a server runs, for `l4ds-server` and `l4ds-aio`. |
 | `internal/zet` | The game server: HTTP endpoints, card lookups, the schedule, and rankings. |

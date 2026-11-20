@@ -56,6 +56,7 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	go link.Run(ctx, checkInterval)
+	go shim.RunCardKeys(ctx, settings.Shim.Cards)
 
 	service := shim.Service(wire.StoreInfo{}, settings.Shim.ServerKey, client)
 	service.Status = link.Status()

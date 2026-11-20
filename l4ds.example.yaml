@@ -70,3 +70,18 @@ shim:
   # The host string the game compares with its table to choose the matching master and lobby. The
   # host must resolve to the server, through the hosts file or the network's DNS.
   server_key: dev.game.zet.square-enix.co.jp
+
+  # The port the game on this PC takes console commands on: start the game with -netconport and
+  # this number. Card keys send their card there. Leave it out to turn card keys off.
+  netcon: 2121
+
+  # Keys that put a card on the game's card reader, for PCs without one. They work whichever
+  # program has the focus; the game reads the card at its next card scan. A key is modifiers
+  # (Ctrl, Alt, Shift, Win) and one key (A to Z, 0 to 9, Num0 to Num9, F1 to F24) joined by "+".
+  # A card goes to the game on shim.netcon unless it names its own port, which lets two games on
+  # one PC (each started with its own -netconport) have their own keys.
+  cards:
+    - key: Ctrl+F1
+      card: "7020392000000001"
+    - key: Ctrl+F2
+      card: "7020392000000002"
