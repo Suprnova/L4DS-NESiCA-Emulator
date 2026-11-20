@@ -76,6 +76,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /class_table", s.classTable)
 	mux.HandleFunc("POST /select", stub("matching room choice: player_id, room_id"))
 	mux.HandleFunc("POST /leave", s.leaveRoom)
+	mux.HandleFunc("POST /equip", s.equip)
 	mux.HandleFunc("/", unanswered)
 	return logRequests(mux)
 }
