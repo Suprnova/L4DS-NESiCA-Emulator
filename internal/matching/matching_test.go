@@ -458,12 +458,12 @@ func versusMaster() (*matching.Master, *time.Time) {
 	return master, &now
 }
 
-func TestMaster_JoiningVersusWithNobodyGathering_OpensARoomThatGathersForAMinute(t *testing.T) {
+func TestMaster_JoiningVersusWithNobodyGathering_OpensARoomThatGathersFor90Seconds(t *testing.T) {
 	master, now := versusMaster()
 
 	got := single(t, master.Reply(lan, versusQuery("11", "3", "1")))
 
-	if len(got) != entrySize || !slices.Equal(got[7:13], make([]byte, 6)) || got[statusAt+1] != 1 || field(got, expireAt) != strconv.FormatInt(now.Unix()+60, 10) {
+	if len(got) != entrySize || !slices.Equal(got[7:13], make([]byte, 6)) || got[statusAt+1] != 1 || field(got, expireAt) != strconv.FormatInt(now.Unix()+90, 10) {
 		t.Fatalf("entry size %d, address %v, permission %d, expire %q", len(got), got[7:13], got[statusAt+1], field(got, expireAt))
 	}
 }
@@ -533,7 +533,7 @@ func TestMaster_EighthVersusPlayer_DecidesTheRoomAtOnce(t *testing.T) {
 func TestMaster_JoiningVersusAfterTheRoomExpired_OpensANewRoom(t *testing.T) {
 	master, now := versusMaster()
 	master.Reply(lan, versusQuery("11", "3", "1"))
-	*now = now.Add(61 * time.Second)
+	*now = now.Add(91 * time.Second)
 
 	got := single(t, master.Reply(lan, versusQuery("12", "3", "3")))
 
@@ -618,6 +618,32 @@ func TestMaster_DecidedVersusRoom_BalancesTheSidesByVersusClass(t *testing.T) {
 
 	if !slices.Equal(got[numbersAt:expireAt], []byte{2, 1, 6, 5, 0, 0, 0, 0}) {
 		t.Fatalf("numbers %v", got[numbersAt:expireAt])
+	}
+}
+
+func TestMaster_DecidingAVersusRoomOfThree_MatchesTheFirstTwo(t *testing.T) {
+	master, _ := versusMaster()
+	for _, player := range []string{"1", "3", "5"} {
+		master.Reply(lan, versusQuery("11", "3", player))
+	}
+
+	got := single(t, master.Reply(lan, versusQuery("12", "4", "1")))
+
+	if field(got, playersAt) != "Boba,Ellis" || slices.Equal(got[7:13], make([]byte, 6)) {
+		t.Fatalf("players %q, address %v", field(got, playersAt), got[7:13])
+	}
+}
+
+func TestMaster_LastToJoinAVersusRoomOfThree_IsLeftWithoutAMatch(t *testing.T) {
+	master, _ := versusMaster()
+	for _, player := range []string{"1", "3", "5"} {
+		master.Reply(lan, versusQuery("11", "3", player))
+	}
+
+	got := single(t, master.Reply(lan, versusQuery("12", "4", "5")))
+
+	if got[statusAt+1] != 0 || field(got, playersAt) != "" || !slices.Equal(got[7:13], make([]byte, 6)) {
+		t.Fatalf("permission %d, players %q, address %v", got[statusAt+1], field(got, playersAt), got[7:13])
 	}
 }
 

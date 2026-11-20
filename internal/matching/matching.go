@@ -152,7 +152,7 @@ const (
 
 	// versusGathering is how long a versus room gathers players. The game counts down to the
 	// room's expiry, and gives a room without one 60 seconds itself.
-	versusGathering = 60 * time.Second
+	versusGathering = 90 * time.Second
 
 	// gatherIdle is how long a member of a versus room without a server stays in it after their
 	// last query. The game polls about every 10 seconds, and gives up on a request after 15.
@@ -253,11 +253,12 @@ func NewMaster(config Config) *Master {
 // player to the room a search would find and returns it, or answers "room lost".
 //
 // Versus queries gather up to eight players for a versus unit and stage. Joining (room 3) adds
-// the asking player to the open room for the unit, or opens one that gathers players for 60
+// the asking player to the open room for the unit, or opens one that gathers players for 90
 // seconds. While a room gathers, every reply lists it once per member, and the game shows the
 // count; polling (room 5) returns the player's room. When the time is up the game asks for the
-// match (room 4): the room is decided, with a server and each member's side, and listed once. A
-// full room is decided at once. Polling or asking without a room answers "room lost".
+// match (room 4): the room is decided, with a server and each member's side, and listed once; an
+// odd member out is left without a match. A full room is decided at once. Polling or asking
+// without a room answers "room lost".
 //
 // National event queries enter a room without a search: a request to enter (room 3) adds the
 // asking player to the newest room for the same event and stage with fewer than four players, or
@@ -573,6 +574,7 @@ func (m *Master) playVersus(host netip.Addr, query Query) (*room, byte) {
 			if failure := m.decide(host, r); failure != 0 {
 				return nil, failure
 			}
+			r = m.versusRoomOf(player)
 		}
 	default:
 		r = m.versusRoomOf(player)
@@ -620,7 +622,8 @@ func (m *Master) versusRoomOf(player int64) *room {
 }
 
 // decide closes a gathering versus room and gives each member a side (see [Master.sides]). A
-// room with players on both sides gets a server; a room left with one member gets none, and the
+// match needs an even number of players: with an odd number, the last to join is moved to a room
+// of their own. A room with players on both sides gets a server; a room of one gets none, and the
 // game then reports that not enough players were found. It returns the failure code to answer
 // with, or 0.
 func (m *Master) decide(host netip.Addr, r *room) byte {
@@ -629,11 +632,26 @@ func (m *Master) decide(host netip.Addr, r *room) byte {
 		if !ok {
 			return errNoServer
 		}
+		if len(r.members)%2 == 1 {
+			m.sitOut(host, r, r.members[len(r.members)-1])
+		}
 		r.server = server
 	}
 	r.permission = versusDecided
 	r.slots = m.sides(r.members)
 	return 0
+}
+
+// sitOut moves a member of a gathering versus room to a decided room of their own.
+func (m *Master) sitOut(host netip.Addr, r *room, player int64) {
+	alone := *r
+	alone.id = m.nextRoomID
+	alone.members = []int64{player}
+	alone.seen = map[int64]time.Time{player: r.seen[player]}
+	m.nextRoomID++
+	m.decide(host, &alone)
+	m.rooms = append(m.rooms, &alone)
+	r.members = slices.DeleteFunc(r.members, func(member int64) bool { return member == player })
 }
 
 // sides returns each member's slot, survivors 0 to 3 and infected 4 to 7, balancing the sides by
