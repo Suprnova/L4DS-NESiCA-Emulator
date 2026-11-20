@@ -10,7 +10,7 @@
 //	POST /nesys/card/insert           {card, data} -> {body}
 //	POST /nesys/card/update           {card, type, data} -> {}
 //	POST /nesys/ranking               {kind, store} -> {body}
-//	GET  /nesys/hello                 -> {protocol}
+//	GET  /nesys/hello                 -> {protocol, maintenance: {phase, minutes}}
 //	GET  /nesys/store/<id>            -> {id, name, prefecture}, or 404 for a store not listed
 //
 // Every request names its cabinet in the X-L4DS-Cabinet header, which the server logs.
@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/maintenance"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/nesys"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/wire"
 )
@@ -65,11 +66,13 @@ type rankingRequest struct {
 }
 
 type hello struct {
-	Protocol int `json:"protocol"`
+	Protocol    int                `json:"protocol"`
+	Maintenance maintenance.Status `json:"maintenance"`
 }
 
-// Handler answers shims' requests with backend, and lists stores to them.
-func Handler(backend nesys.Backend, stores []Store) http.Handler {
+// Handler answers shims' requests with backend, lists stores to them, and tells them the
+// maintenance status that status returns.
+func Handler(backend nesys.Backend, stores []Store, status func() maintenance.Status) http.Handler {
 	byID := map[uint32]Store{}
 	for _, store := range stores {
 		byID[store.ID] = store
@@ -115,7 +118,7 @@ func Handler(backend nesys.Backend, stores []Store) http.Handler {
 		respond(w, cardReply{Body: body}, err)
 	})
 	mux.HandleFunc("GET /nesys/hello", func(w http.ResponseWriter, r *http.Request) {
-		respond(w, hello{Protocol}, nil)
+		respond(w, hello{Protocol, status()}, nil)
 	})
 	mux.HandleFunc("GET /nesys/store/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.ParseUint(r.PathValue("id"), 10, 32)

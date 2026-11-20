@@ -3,7 +3,8 @@
 // Command l4ds-shim stands in for Taito's NesysService on a cabinet or player PC: it serves the
 // game's NESYS pipe and sends the game's card, ranking, and game server requests to an
 // l4ds-server. While the server cannot be reached, the game is told it is offline; a server that
-// does not list the cabinet's store gets the game told the store is unregistered.
+// does not list the cabinet's store gets the game told the store is unregistered. The server's
+// maintenance windows reach the game as a warning, then maintenance.
 package main
 
 import (
@@ -15,7 +16,6 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"time"
 
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/config"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/pipe"
@@ -23,9 +23,6 @@ import (
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/shim"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/wire"
 )
-
-// checkInterval is how often the shim checks that the server answers.
-const checkInterval = 10 * time.Second
 
 func main() {
 	if err := run(); err != nil {
@@ -47,7 +44,7 @@ func run() error {
 	}
 
 	client := remote.NewClient(strings.TrimSuffix(settings.Shim.Server, "/"), fmt.Sprintf("%d/%s", settings.Shim.Store, shim.MAC))
-	if err := client.Hello(); errors.Is(err, remote.ErrProtocol) {
+	if _, err := client.Hello(); errors.Is(err, remote.ErrProtocol) {
 		return err
 	}
 	link := shim.NewLink(client, settings.Shim.Store, settings.Shim.ServerKey)
@@ -55,7 +52,7 @@ func run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	go link.Run(ctx, checkInterval)
+	go link.Run(ctx, shim.CheckInterval)
 	go shim.RunCardKeys(ctx, settings.Shim.Cards)
 
 	service := shim.Service(wire.StoreInfo{}, settings.Shim.ServerKey, client)

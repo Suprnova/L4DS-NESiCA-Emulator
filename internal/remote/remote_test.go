@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/maintenance"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/nesys"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/remote"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/store"
@@ -21,12 +22,18 @@ var testStore = remote.Store{ID: 7, Name: "Test Arcade", Prefecture: "Osaka"}
 // connect runs a game server behind the remote handler and returns a client of it.
 func connect(t *testing.T) *remote.Client {
 	t.Helper()
+	return connectInMaintenance(t, maintenance.Status{})
+}
+
+// connectInMaintenance is connect with a server reporting status.
+func connectInMaintenance(t *testing.T, status maintenance.Status) *remote.Client {
+	t.Helper()
 	s, err := store.Open(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	server := httptest.NewServer(remote.Handler(zet.NewServer(s, zet.Catalog{}), []remote.Store{testStore}))
+	server := httptest.NewServer(remote.Handler(zet.NewServer(s, zet.Catalog{}), []remote.Store{testStore}, func() maintenance.Status { return status }))
 	t.Cleanup(server.Close)
 	return remote.NewClient(server.URL, "7/020000000001")
 }
@@ -98,10 +105,21 @@ func TestClient_Ranking_ReturnsTheBody(t *testing.T) {
 func TestClient_Hello_SameProtocol_Succeeds(t *testing.T) {
 	client := connect(t)
 
-	err := client.Hello()
+	got, err := client.Hello()
 
-	if err != nil {
-		t.Fatalf("Hello() = %v", err)
+	if err != nil || got != (maintenance.Status{}) {
+		t.Fatalf("Hello() = %+v, %v", got, err)
+	}
+}
+
+func TestClient_Hello_DuringAWarning_ReturnsTheMaintenanceStatus(t *testing.T) {
+	coming := maintenance.Status{Phase: maintenance.Coming, Minutes: 12}
+	client := connectInMaintenance(t, coming)
+
+	got, err := client.Hello()
+
+	if err != nil || got != coming {
+		t.Fatalf("Hello() = %+v, %v; want %+v", got, err, coming)
 	}
 }
 

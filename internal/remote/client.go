@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/maintenance"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/wire"
 )
 
@@ -83,16 +84,17 @@ func (c *Client) Ranking(kind, store uint32) (string, error) {
 	return reply.Body, err
 }
 
-// Hello checks that the server is reachable and speaks this protocol.
-func (c *Client) Hello() error {
+// Hello checks that the server is reachable and speaks this protocol, and returns its
+// maintenance status.
+func (c *Client) Hello() (maintenance.Status, error) {
 	var reply hello
 	if err := c.get("/nesys/hello", &reply); err != nil {
-		return err
+		return maintenance.Status{}, err
 	}
 	if reply.Protocol != Protocol {
-		return fmt.Errorf("%w: the server speaks %d, this shim %d", ErrProtocol, reply.Protocol, Protocol)
+		return maintenance.Status{}, fmt.Errorf("%w: the server speaks %d, this shim %d", ErrProtocol, reply.Protocol, Protocol)
 	}
-	return nil
+	return reply.Maintenance, nil
 }
 
 // Store returns the store the server lists under id, or ErrUnknownStore.

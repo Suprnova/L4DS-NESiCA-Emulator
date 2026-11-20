@@ -11,10 +11,12 @@ import (
 	"net/http"
 	"net/netip"
 	"strconv"
+	"time"
 
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/config"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/dedicated"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/game"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/maintenance"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/matching"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/remote"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/store"
@@ -56,15 +58,21 @@ type Server struct {
 	// Backend answers the game's requests, for a shim running in the same process.
 	Backend *zet.Server
 
-	players  *store.Store
-	closers  []func() error
-	poolDone chan struct{}
+	players     *store.Store
+	stores      []config.Store
+	maintenance maintenance.Schedule
+	closers     []func() error
+	poolDone    chan struct{}
 }
 
 // Start opens the database and starts the matching master, the room servers, and, when asked,
 // the endpoint shims connect to. Cancelling ctx stops the room servers; Close stops the rest.
 func Start(ctx context.Context, options Options) (*Server, error) {
 	schedule, err := options.Config.Schedule()
+	if err != nil {
+		return nil, err
+	}
+	windows, err := options.Config.Maintenance.Schedule()
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +84,7 @@ func Start(ctx context.Context, options Options) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{players: players, closers: []func() error{players.Close}}
+	s := &Server{players: players, stores: options.Config.Stores, maintenance: windows, closers: []func() error{players.Close}}
 
 	storeName := storeNames(options.Config.Stores)
 	rooms := matching.NewMaster(matching.Config{
@@ -118,7 +126,7 @@ func Start(ctx context.Context, options Options) (*Server, error) {
 			s.Close()
 			return nil, fmt.Errorf("shim endpoint on %s: %w", options.Config.Listen, err)
 		}
-		shims := &http.Server{Handler: remote.Handler(s.Backend, remoteStores(options.Config.Stores))}
+		shims := &http.Server{Handler: remote.Handler(s.Backend, remoteStores(options.Config.Stores), s.Maintenance)}
 		s.closers = append(s.closers, shims.Close)
 		go shims.Serve(listener)
 		slog.Info("serving shims", "address", options.Config.Listen)
@@ -133,6 +141,23 @@ func Start(ctx context.Context, options Options) (*Server, error) {
 	}
 	slog.Info("server started", "stores", len(options.Config.Stores), "versus units", len(schedule.Versus), "events", len(schedule.Events))
 	return s, nil
+}
+
+// Maintenance returns the server's maintenance status now.
+func (s *Server) Maintenance() maintenance.Status { return s.maintenance.At(time.Now()) }
+
+// Hello returns the server's maintenance status, as a shim's link asks for it; a server in the
+// same process always answers.
+func (s *Server) Hello() (maintenance.Status, error) { return s.Maintenance(), nil }
+
+// Store returns the store listed under id, or remote.ErrUnknownStore.
+func (s *Server) Store(id uint32) (remote.Store, error) {
+	for _, store := range remoteStores(s.stores) {
+		if store.ID == id {
+			return store, nil
+		}
+	}
+	return remote.Store{}, remote.ErrUnknownStore
 }
 
 // Close stops the server, after waiting for the room servers to stop once ctx is cancelled.

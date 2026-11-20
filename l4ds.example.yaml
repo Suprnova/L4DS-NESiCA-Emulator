@@ -61,6 +61,20 @@ server:
       name: サンプル店内イベント
       detail: l4ds-aio の試験用イベントです。
 
+  # Maintenance windows. During a window every game is offline in maintenance; warn ahead of one,
+  # games are told it is coming and count down the minutes. daily_start and daily_end are a window
+  # every day as HH:MM in the server's time zone (an end before the start runs past midnight);
+  # windows are one-off windows, which may overlap or extend the daily one. warn is a duration such
+  # as 30m; left out, games are not warned. Left out entirely, there is no maintenance. The
+  # official service's ran daily from 06:00 to 08:00.
+  # maintenance:
+  #   warn: 30m
+  #   daily_start: "06:00"
+  #   daily_end: "08:00"
+  #   windows:
+  #     - start: 2027-01-01T00:00:00+09:00
+  #       end: 2027-01-01T09:15:00+09:00
+
 shim:
   # The server's address. l4ds-aio ignores it: its server runs in the same process.
   server: http://127.0.0.1:8080

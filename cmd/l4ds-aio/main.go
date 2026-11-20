@@ -34,8 +34,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	store, listed := settings.Server.Store(settings.Shim.Store)
-	if !listed {
+	if _, listed := settings.Server.Store(settings.Shim.Store); !listed {
 		return fmt.Errorf("shim.store %d is not one of server.stores", settings.Shim.Store)
 	}
 
@@ -50,7 +49,11 @@ func run() error {
 		s.Close()
 	}()
 
+	link := shim.NewLink(s, settings.Shim.Store, settings.Shim.ServerKey)
+	link.Check()
+	go link.Run(ctx, shim.CheckInterval)
 	go shim.RunCardKeys(ctx, settings.Shim.Cards)
-	cabinet := wire.StoreInfo{ID: store.ID, Name: store.Name, Prefecture: store.Prefecture}
-	return shim.Run(ctx, *path, shim.Service(cabinet, settings.Shim.ServerKey, s.Backend))
+	service := shim.Service(wire.StoreInfo{}, settings.Shim.ServerKey, s.Backend)
+	service.Status = link.Status()
+	return shim.Run(ctx, *path, service)
 }
