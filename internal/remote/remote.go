@@ -9,7 +9,7 @@
 //	POST /nesys/card/reissue-test     {card} -> {status, body}
 //	POST /nesys/card/insert           {card, data} -> {body}
 //	POST /nesys/card/update           {card, type, data} -> {}
-//	POST /nesys/ranking               {kind} -> {body}
+//	POST /nesys/ranking               {kind, store} -> {body}
 //	GET  /nesys/hello                 -> {protocol}
 //	GET  /nesys/store/<id>            -> {id, name, prefecture}, or 404 for a store not listed
 //
@@ -60,7 +60,8 @@ type cardReply struct {
 }
 
 type rankingRequest struct {
-	Kind uint32 `json:"kind"`
+	Kind  uint32 `json:"kind"`
+	Store uint32 `json:"store"`
 }
 
 type hello struct {
@@ -110,7 +111,7 @@ func Handler(backend nesys.Backend, stores []Store) http.Handler {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		body, err := backend.Ranking(request.Kind)
+		body, err := backend.Ranking(request.Kind, request.Store)
 		respond(w, cardReply{Body: body}, err)
 	})
 	mux.HandleFunc("GET /nesys/hello", func(w http.ResponseWriter, r *http.Request) {

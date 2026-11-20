@@ -88,7 +88,7 @@ func TestClient_Update_UnregisteredCard_IsAnError(t *testing.T) {
 func TestClient_Ranking_ReturnsTheBody(t *testing.T) {
 	client := connect(t)
 
-	body, err := client.Ranking(zet.RankingNationalCoop)
+	body, err := client.Ranking(zet.RankingNationalCoop, 1)
 
 	if err != nil || body != "1\n1\n0\n" {
 		t.Fatalf("Ranking() = %q, %v", body, err)

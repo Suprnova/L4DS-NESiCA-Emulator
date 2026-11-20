@@ -44,9 +44,10 @@ type Backend interface {
 
 // Rankings answers the game's ranking requests.
 type Rankings interface {
-	// Ranking returns the reply body of the ranking of the given kind: result, API_ID, the
-	// entry count and the entries.
-	Ranking(kind uint32) (string, error)
+	// Ranking returns the reply body of the ranking of the given kind, asked for by a cabinet of
+	// the given store (0 when the request names none): result, API_ID, the entry count and the
+	// entries.
+	Ranking(kind, store uint32) (string, error)
 }
 
 // Cards answers the game's card commands.
@@ -249,10 +250,10 @@ const emptyRanking = "1\n1\n0\n"
 // request that cannot be answered gets an empty ranking.
 func ranking(rankings Rankings, payload []byte) []wire.Frame {
 	body := emptyRanking
-	if kind, err := wire.ParseRankingKind(payload); err != nil || rankings == nil {
+	if request, err := wire.ParseRankingRequest(payload); err != nil || rankings == nil {
 		slog.Info("stub reply", "command", "RANKING_DATA", "ignored", "rankings: no ranking source")
-	} else if body, err = rankings.Ranking(kind); err != nil {
-		slog.Error("ranking", "kind", kind, "error", err)
+	} else if body, err = rankings.Ranking(request.Kind, request.Store); err != nil {
+		slog.Error("ranking", "kind", request.Kind, "store", request.Store, "error", err)
 		body = emptyRanking
 	}
 	reply := wire.RankingReply{Status: 1, Body: body}

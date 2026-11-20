@@ -279,13 +279,15 @@ func TestServe_RankingData_RepliesWithAnEmptyRanking(t *testing.T) {
 	}
 }
 
-type fakeRankings map[uint32]string
+type fakeRankings map[[2]uint32]string
 
-func (r fakeRankings) Ranking(kind uint32) (string, error) { return r[kind], nil }
+func (r fakeRankings) Ranking(kind, store uint32) (string, error) {
+	return r[[2]uint32{kind, store}], nil
+}
 
-func TestServe_RankingData_RepliesWithTheRankingOfTheRequestedKind(t *testing.T) {
-	game := serveWith(t, backend{Rankings: fakeRankings{30: "1\n1\n1\nentry\n"}})
-	request := []byte("\x1e\x00\x00\x00\x00\x00\x00\x00\x0b\x00\x00\x00tenpo_id=1\x00\x00\x00\x00\x00")
+func TestServe_RankingData_RepliesWithTheRankingOfTheRequestedKindAndStore(t *testing.T) {
+	game := serveWith(t, backend{Rankings: fakeRankings{{30, 2}: "1\n1\n1\nentry\n"}})
+	request := []byte("\x1e\x00\x00\x00\x00\x00\x00\x00\x0b\x00\x00\x00tenpo_id=2\x00\x00\x00\x00\x00")
 
 	reply := exchange(t, game, wire.RankingData, request)
 

@@ -77,9 +77,9 @@ func (c *Client) Update(cardID string, dataType uint32, data string) error {
 }
 
 // Ranking fetches a ranking from the server.
-func (c *Client) Ranking(kind uint32) (string, error) {
+func (c *Client) Ranking(kind, store uint32) (string, error) {
 	var reply cardReply
-	err := c.call("/nesys/ranking", rankingRequest{Kind: kind}, &reply)
+	err := c.call("/nesys/ranking", rankingRequest{Kind: kind, Store: store}, &reply)
 	return reply.Body, err
 }
 

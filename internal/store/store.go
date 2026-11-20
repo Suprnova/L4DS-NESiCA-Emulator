@@ -422,12 +422,13 @@ type Scorer struct {
 }
 
 // TopScorersSince returns up to limit players by the total score of their results played at or
-// after since, highest first, leaving out versus results and players with no score.
-func (s *Store) TopScorersSince(since time.Time, limit int) ([]Scorer, error) {
+// after since, highest first, leaving out versus results and players with no score. A nonzero
+// homeStore keeps only the players of that home store.
+func (s *Store) TopScorersSince(since time.Time, homeStore int64, limit int) ([]Scorer, error) {
 	rows, err := s.db.Query(`SELECT `+playerColumns+`, total FROM players
 		JOIN (SELECT player_id, SUM(score) AS total FROM results WHERE played_at >= ? AND vs_plays = 0 GROUP BY player_id)
 		ON player_id = id
-		WHERE total > 0 ORDER BY total DESC, id LIMIT ?`, since.Unix(), limit)
+		WHERE total > 0 AND (? = 0 OR home_store = ?) ORDER BY total DESC, id LIMIT ?`, since.Unix(), homeStore, homeStore, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -445,9 +446,9 @@ func (s *Store) TopScorersSince(since time.Time, limit int) ([]Scorer, error) {
 }
 
 // TopVersusPlayers returns up to limit players who have played versus, most versus class points
-// first.
-func (s *Store) TopVersusPlayers(limit int) ([]Player, error) {
-	return s.players(`vs_plays > 0 ORDER BY vs_class_point DESC, id LIMIT ?`, limit)
+// first. A nonzero homeStore keeps only the players of that home store.
+func (s *Store) TopVersusPlayers(homeStore int64, limit int) ([]Player, error) {
+	return s.players(`vs_plays > 0 AND (? = 0 OR home_store = ?) ORDER BY vs_class_point DESC, id LIMIT ?`, homeStore, homeStore, limit)
 }
 
 // playerColumns lists the columns scanPlayer reads, in order.

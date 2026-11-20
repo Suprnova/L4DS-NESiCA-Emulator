@@ -1,6 +1,10 @@
 package wire
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+	"strconv"
+	"strings"
+)
 
 const cardIDSize = 16
 
@@ -62,13 +66,32 @@ func (r CardReply) Encode() []byte {
 	return append(buf, r.Body...)
 }
 
-// ParseRankingKind reads which ranking a RankingData request asks for: the first u32 of the
-// payload, which the game sets to 10, 20, 30 or 40.
-func ParseRankingKind(payload []byte) (uint32, error) {
+// RankingRequest is a RankingData request.
+type RankingRequest struct {
+	// Kind is the ranking asked for: 10, 20, 30 or 40.
+	Kind uint32
+	// Store is the asking cabinet's store id (tenpo_id), or 0 when the request names none.
+	Store uint32
+}
+
+// ParseRankingRequest reads a RankingData payload: u32 kind, u32 0, u32 n, then n bytes of
+// key=value text ending in a NUL, such as "tenpo_id=1".
+func ParseRankingRequest(payload []byte) (RankingRequest, error) {
 	if len(payload) < 4 {
-		return 0, ErrBadFrame
+		return RankingRequest{}, ErrBadFrame
 	}
-	return binary.LittleEndian.Uint32(payload), nil
+	request := RankingRequest{Kind: binary.LittleEndian.Uint32(payload)}
+	if len(payload) < 12 {
+		return request, nil
+	}
+	n := min(int(binary.LittleEndian.Uint32(payload[8:])), len(payload)-12)
+	for pair := range strings.SplitSeq(getString(payload[12:12+n]), ",") {
+		if value, found := strings.CutPrefix(pair, "tenpo_id="); found {
+			store, _ := strconv.ParseUint(value, 10, 32)
+			request.Store = uint32(store)
+		}
+	}
+	return request, nil
 }
 
 // RankingReply is the payload of RankingDataReply: a status and a line-oriented body of

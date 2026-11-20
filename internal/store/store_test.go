@@ -267,7 +267,7 @@ func TestTopScorersSince_TotalsEachPlayersScoresInThePeriod(t *testing.T) {
 	s.RecordResult(high.ID, store.Result{Played: monthStart.Add(time.Hour), Score: 40})
 	s.RecordResult(high.ID, store.Result{Played: monthStart.Add(2 * time.Hour), Score: 30})
 
-	got, err := s.TopScorersSince(monthStart, 10)
+	got, err := s.TopScorersSince(monthStart, 0, 10)
 
 	if err != nil || len(got) != 2 || got[0].Player.ID != high.ID || got[0].Score != 70 || got[1].Player.ID != low.ID || got[1].Score != 50 {
 		t.Fatalf("TopScorersSince() = %+v, %v", got, err)
@@ -281,7 +281,7 @@ func TestTopScorersSince_LeavesOutEarlierAndVersusResults(t *testing.T) {
 	s.RecordResult(player.ID, store.Result{Played: monthStart, Score: 500, VSPlays: 1})
 	s.RecordResult(player.ID, store.Result{Played: monthStart, Score: 20})
 
-	got, _ := s.TopScorersSince(monthStart, 10)
+	got, _ := s.TopScorersSince(monthStart, 0, 10)
 
 	if len(got) != 1 || got[0].Score != 20 {
 		t.Fatalf("TopScorersSince() = %+v, want a score of 20", got)
@@ -295,7 +295,7 @@ func TestTopScorersSince_StopsAtTheLimit(t *testing.T) {
 		s.RecordResult(player.ID, store.Result{Played: monthStart, Score: 10})
 	}
 
-	got, _ := s.TopScorersSince(monthStart, 2)
+	got, _ := s.TopScorersSince(monthStart, 0, 2)
 
 	if len(got) != 2 {
 		t.Fatalf("TopScorersSince() returned %d players, want 2", len(got))
@@ -311,9 +311,37 @@ func TestTopVersusPlayers_OrdersVersusPlayersByVersusClassPoints(t *testing.T) {
 	s.RecordResult(high.ID, store.Result{VSPlays: 2, VSClassPoint: 40})
 	s.RecordResult(coop.ID, store.Result{Score: 100})
 
-	got, err := s.TopVersusPlayers(10)
+	got, err := s.TopVersusPlayers(0, 10)
 
 	if err != nil || len(got) != 2 || got[0].ID != high.ID || got[1].ID != low.ID {
 		t.Fatalf("TopVersusPlayers() = %+v, %v", got, err)
+	}
+}
+
+func TestTopScorersSince_WithAHomeStore_KeepsThatStoresPlayers(t *testing.T) {
+	s := openStore(t)
+	here, _ := s.Register("7020392000000001", "Here", 1, 2)
+	elsewhere, _ := s.Register("7020392000000002", "Elsewhere", 1, 1)
+	s.RecordResult(here.ID, store.Result{Played: monthStart, Score: 10})
+	s.RecordResult(elsewhere.ID, store.Result{Played: monthStart, Score: 90})
+
+	got, err := s.TopScorersSince(monthStart, 2, 10)
+
+	if err != nil || len(got) != 1 || got[0].Player.ID != here.ID {
+		t.Fatalf("TopScorersSince() = %+v, %v; want only %d", got, err, here.ID)
+	}
+}
+
+func TestTopVersusPlayers_WithAHomeStore_KeepsThatStoresPlayers(t *testing.T) {
+	s := openStore(t)
+	here, _ := s.Register("7020392000000001", "Here", 1, 2)
+	elsewhere, _ := s.Register("7020392000000002", "Elsewhere", 1, 1)
+	s.RecordResult(here.ID, store.Result{VSPlays: 1, VSClassPoint: 5})
+	s.RecordResult(elsewhere.ID, store.Result{VSPlays: 1, VSClassPoint: 40})
+
+	got, err := s.TopVersusPlayers(2, 10)
+
+	if err != nil || len(got) != 1 || got[0].ID != here.ID {
+		t.Fatalf("TopVersusPlayers() = %+v, %v; want only %d", got, err, here.ID)
 	}
 }

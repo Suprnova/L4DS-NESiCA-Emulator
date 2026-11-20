@@ -26,10 +26,15 @@ const rankingSize = 10
 // total score of their results this calendar month (in the server's time zone), versus results
 // left out, and show their co-op class. The versus rankings order the players who have played
 // versus by versus class points over all time, show those as the score, and show their versus
-// class. Each player shows their home store. The store rankings are not limited to the asking
-// store, so they equal the national ones. Titles, class names, clans and avatars are empty.
-func (s *Server) Ranking(kind uint32) (string, error) {
-	entries, err := s.rankingEntries(kind == RankingNationalVersus || kind == RankingStoreVersus)
+// class. Each player shows their home store. The store rankings keep only the players whose home
+// store is the asking cabinet's store; with no store (0), they equal the national ones. Titles,
+// class names, clans and avatars are empty.
+func (s *Server) Ranking(kind, store uint32) (string, error) {
+	homeStore := int64(0)
+	if kind == RankingStoreCoop || kind == RankingStoreVersus {
+		homeStore = int64(store)
+	}
+	entries, err := s.rankingEntries(kind == RankingNationalVersus || kind == RankingStoreVersus, homeStore)
 	if err != nil {
 		return "", err
 	}
@@ -51,10 +56,11 @@ type rankingEntry struct {
 	score, class int64
 }
 
-// rankingEntries returns the entries of the versus ranking or the co-op ranking, best first.
-func (s *Server) rankingEntries(versus bool) ([]rankingEntry, error) {
+// rankingEntries returns the entries of the versus ranking or the co-op ranking, best first,
+// of the players of homeStore, or of every player when it is 0.
+func (s *Server) rankingEntries(versus bool, homeStore int64) ([]rankingEntry, error) {
 	if versus {
-		players, err := s.store.TopVersusPlayers(rankingSize)
+		players, err := s.store.TopVersusPlayers(homeStore, rankingSize)
 		entries := make([]rankingEntry, len(players))
 		for i, player := range players {
 			entries[i] = rankingEntry{player, player.VSClassPoint, player.VSClassID}
@@ -63,7 +69,7 @@ func (s *Server) rankingEntries(versus bool) ([]rankingEntry, error) {
 	}
 
 	now := s.now()
-	scorers, err := s.store.TopScorersSince(time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()), rankingSize)
+	scorers, err := s.store.TopScorersSince(time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()), homeStore, rankingSize)
 	entries := make([]rankingEntry, len(scorers))
 	for i, scorer := range scorers {
 		entries[i] = rankingEntry{scorer.Player, scorer.Score, scorer.Player.CoopClassID}

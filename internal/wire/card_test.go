@@ -75,3 +75,39 @@ func TestParseCardID_ReadsTheLeadingCardNumber(t *testing.T) {
 		t.Fatalf("ParseCardID() = %q, %v", got, err)
 	}
 }
+
+func TestParseRankingRequest_GamePayload_ReadsKindAndStore(t *testing.T) {
+	payload := []byte("\x14\x00\x00\x00\x00\x00\x00\x00\x0b\x00\x00\x00tenpo_id=7\x00\x00\x00\x00\x00")
+
+	got, err := wire.ParseRankingRequest(payload)
+
+	if err != nil || got != (wire.RankingRequest{Kind: 20, Store: 7}) {
+		t.Fatalf("ParseRankingRequest() = %+v, %v", got, err)
+	}
+}
+
+func TestParseRankingRequest_KindOnly_HasNoStore(t *testing.T) {
+	got, err := wire.ParseRankingRequest([]byte{10, 0, 0, 0})
+
+	if err != nil || got != (wire.RankingRequest{Kind: 10}) {
+		t.Fatalf("ParseRankingRequest() = %+v, %v", got, err)
+	}
+}
+
+func TestParseRankingRequest_LengthPastTheEnd_ReadsWhatIsThere(t *testing.T) {
+	payload := []byte("\x28\x00\x00\x00\x00\x00\x00\x00\xff\x00\x00\x00tenpo_id=3")
+
+	got, err := wire.ParseRankingRequest(payload)
+
+	if err != nil || got != (wire.RankingRequest{Kind: 40, Store: 3}) {
+		t.Fatalf("ParseRankingRequest() = %+v, %v", got, err)
+	}
+}
+
+func TestParseRankingRequest_ShortPayload_ReturnsErrBadFrame(t *testing.T) {
+	_, err := wire.ParseRankingRequest([]byte{10})
+
+	if err != wire.ErrBadFrame {
+		t.Fatalf("error = %v, want ErrBadFrame", err)
+	}
+}
