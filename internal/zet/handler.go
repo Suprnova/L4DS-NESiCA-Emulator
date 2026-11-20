@@ -20,7 +20,7 @@ type Server struct {
 	stages    []game.Stage
 	classes   []game.VersusClass
 	schedule  Schedule
-	storeName string
+	storeName func(storeID int64) string
 	leave     func(playerID int64, roomID uint32)
 	now       func() time.Time
 	handler   http.Handler
@@ -38,8 +38,9 @@ type Catalog struct {
 	// Schedule holds the versus schedule and the events; without them versus and the event
 	// modes stay unavailable.
 	Schedule Schedule
-	// StoreName is the store every player's ranking entry shows.
-	StoreName string
+	// StoreName returns the name of the store with the given id, for players' home stores on
+	// their cards and in rankings; "" for an unknown store. When nil, no store has a name.
+	StoreName func(storeID int64) string
 	// Leave is told when a player leaves the matching room they were in; it may be nil.
 	Leave func(playerID int64, roomID uint32)
 }
@@ -47,6 +48,9 @@ type Catalog struct {
 // NewServer returns a server that keeps its players in s and offers catalog.
 func NewServer(s *store.Store, catalog Catalog) *Server {
 	server := &Server{store: s, levels: catalog.Levels, stages: catalog.Stages, classes: catalog.VersusClasses, schedule: catalog.Schedule, storeName: catalog.StoreName, leave: catalog.Leave, now: time.Now}
+	if server.storeName == nil {
+		server.storeName = func(int64) string { return "" }
+	}
 	server.handler = server.routes()
 	return server
 }

@@ -17,10 +17,13 @@ func rankingServer(t *testing.T) (*zet.Server, *store.Store) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	server := zet.NewServer(s, zet.Catalog{StoreName: "L4DS Emulator"})
+	server := zet.NewServer(s, zet.Catalog{StoreName: storeName})
 	server.SetClock(func() time.Time { return now })
 	return server, s
 }
+
+// storeName names stores 1 and 2.
+func storeName(id int64) string { return map[int64]string{1: "L4DS Emulator", 2: "Second Store"}[id] }
 
 // now is the rankings' current time, in the middle of a month.
 var now = time.Date(2026, 11, 17, 12, 0, 0, 0, time.Local)
@@ -37,8 +40,8 @@ func TestServer_Ranking_NoPlayers_IsEmpty(t *testing.T) {
 
 func TestServer_CoopRanking_ListsPlayersByScore(t *testing.T) {
 	server, s := rankingServer(t)
-	low, _ := s.Register("7020392000000001", "Low", 0)
-	high, _ := s.Register("7020392000000002", "High", 0)
+	low, _ := s.Register("7020392000000001", "Low", 0, 1)
+	high, _ := s.Register("7020392000000002", "High", 0, 1)
 	s.RecordResult(low.ID, store.Result{Played: now, Score: 10, CoopClassID: 2})
 	s.RecordResult(high.ID, store.Result{Played: now, Score: 90})
 
@@ -52,9 +55,21 @@ func TestServer_CoopRanking_ListsPlayersByScore(t *testing.T) {
 	}
 }
 
+func TestServer_Ranking_ShowsEachPlayersHomeStore(t *testing.T) {
+	server, s := rankingServer(t)
+	player, _ := s.Register("7020392000000001", "Survivor", 0, 2)
+	s.RecordResult(player.ID, store.Result{Played: now, Score: 10})
+
+	got, _ := server.Ranking(zet.RankingNationalCoop)
+
+	if lines := strings.Split(got, "\n"); lines[11] != "Second Store" {
+		t.Fatalf("Ranking() lines = %q, want store Second Store", lines)
+	}
+}
+
 func TestServer_Ranking_PlayerWithACharacter_HasEmptyAvatarSlots(t *testing.T) {
 	server, s := rankingServer(t)
-	player, _ := s.Register("7020392000000001", "Survivor", 3)
+	player, _ := s.Register("7020392000000001", "Survivor", 3, 1)
 	s.RecordResult(player.ID, store.Result{Played: now, Score: 10})
 
 	got, _ := server.Ranking(zet.RankingNationalCoop)
@@ -67,8 +82,8 @@ func TestServer_Ranking_PlayerWithACharacter_HasEmptyAvatarSlots(t *testing.T) {
 
 func TestServer_VersusRanking_ListsVersusPlayersByVersusClassPoints(t *testing.T) {
 	server, s := rankingServer(t)
-	versus, _ := s.Register("7020392000000001", "Versus", 0)
-	coop, _ := s.Register("7020392000000002", "Coop", 0)
+	versus, _ := s.Register("7020392000000001", "Versus", 0, 1)
+	coop, _ := s.Register("7020392000000002", "Coop", 0, 1)
 	s.RecordResult(versus.ID, store.Result{VSPlays: 1, VSClassPoint: 25, VSClassID: 3, Score: 5})
 	s.RecordResult(coop.ID, store.Result{Score: 90})
 
@@ -82,7 +97,7 @@ func TestServer_VersusRanking_ListsVersusPlayersByVersusClassPoints(t *testing.T
 
 func TestServer_CoopRanking_TotalsThisMonthsScores(t *testing.T) {
 	server, s := rankingServer(t)
-	player, _ := s.Register("7020392000000001", "Survivor", 0)
+	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
 	lastMonth := time.Date(2026, 10, 31, 23, 59, 59, 0, time.Local)
 	s.RecordResult(player.ID, store.Result{Played: lastMonth, Score: 1000})
 	s.RecordResult(player.ID, store.Result{Played: now.AddDate(0, 0, -16), Score: 30})

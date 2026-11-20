@@ -70,7 +70,7 @@ func TestHandler_ChapterLifecycle_AcceptsEachStage(t *testing.T) {
 
 func TestHandler_Result_AddsTheChapterToThePlayersTotals(t *testing.T) {
 	server, s := newServer(t)
-	player, _ := s.Register("7020392000000001", "Survivor", 0)
+	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
 
 	got := postTo(server, "/result", fmt.Sprintf("player_id=%d&zet=568&exp=222&TOTAL_SCORE=195", player.ID))
 
@@ -82,7 +82,7 @@ func TestHandler_Result_AddsTheChapterToThePlayersTotals(t *testing.T) {
 
 func TestHandler_Result_KeepsTheClassesTheGameReports(t *testing.T) {
 	server, s := newServer(t)
-	player, _ := s.Register("7020392000000001", "Survivor", 0)
+	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
 	postTo(server, "/result", fmt.Sprintf("player_id=%d&class_point=40&coop_class_id=2&vs_class_id=1", player.ID))
 
 	postTo(server, "/result", fmt.Sprintf("player_id=%d&class_point=-15&coop_class_id=2&vs_class_id=1", player.ID))
@@ -136,7 +136,7 @@ func TestHandler_Select_IsAcknowledged(t *testing.T) {
 
 func TestHandler_VersusResult_AddsToTheVersusClassPoints(t *testing.T) {
 	server, s := newServer(t)
-	player, _ := s.Register("7020392000000001", "Survivor", 0)
+	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
 
 	postTo(server, "/result", fmt.Sprintf("player_id=%d&game_mode=7&class_point=30&coop_class_id=1&vs_class_id=2", player.ID))
 
@@ -148,7 +148,7 @@ func TestHandler_VersusResult_AddsToTheVersusClassPoints(t *testing.T) {
 
 func TestHandler_VersusResults_CountPlaysAndWins(t *testing.T) {
 	server, s := newServer(t)
-	player, _ := s.Register("7020392000000001", "Survivor", 0)
+	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
 	postTo(server, "/result", fmt.Sprintf("player_id=%d&game_mode=7&vs_you_win=1", player.ID))
 	postTo(server, "/result", fmt.Sprintf("player_id=%d&game_mode=7&vs_you_win=0", player.ID))
 
@@ -179,7 +179,7 @@ func TestHandler_Stages_ListsEveryStageInEachKind(t *testing.T) {
 
 func TestHandler_Login_SendsTheSettingsTheCardStored(t *testing.T) {
 	server, s := newServer(t)
-	player, _ := s.Register("7020392000000001", "Survivor", 0)
+	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
 	server.Update("7020392000000001", 3, "volume=2,volume_bgm=7,mouse_acce=1,mouse_horizon=1,mouse_vertical=0,mouse_sens=9,key_type=2")
 
 	lines := strings.Split(postTo(server, "/login", fmt.Sprintf("player_id=%d", player.ID)), "\n")
@@ -221,7 +221,7 @@ func TestHandler_UnknownPath_IsNotFound(t *testing.T) {
 
 func TestHandler_Login_CountsTheLogin(t *testing.T) {
 	server, s := newServer(t)
-	player, _ := s.Register("7020392000000001", "Survivor", 0)
+	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
 
 	postTo(server, "/login", fmt.Sprintf("player_id=%d", player.ID))
 
@@ -233,7 +233,7 @@ func TestHandler_Login_CountsTheLogin(t *testing.T) {
 
 func TestHandler_EventOrVersusResult_LeavesTheStageProgressAlone(t *testing.T) {
 	server, s := newServer(t)
-	player, _ := s.Register("7020392000000001", "Survivor", 0)
+	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
 	postTo(server, "/result", fmt.Sprintf("player_id=%d&game_mode=2&stage_id=1&chapter_id=1&clear_flag=1&campaign_flag=0", player.ID))
 
 	lines := strings.Split(postTo(server, "/login", fmt.Sprintf("player_id=%d", player.ID)), "\n")
@@ -245,7 +245,7 @@ func TestHandler_EventOrVersusResult_LeavesTheStageProgressAlone(t *testing.T) {
 
 func TestHandler_Login_ReportsClearedStagesAfterTheConfig(t *testing.T) {
 	server, s := newServer(t)
-	player, _ := s.Register("7020392000000001", "Survivor", 0)
+	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
 	postTo(server, "/result", fmt.Sprintf("player_id=%d&stage_id=1&chapter_id=1&clear_flag=1&campaign_flag=1", player.ID))
 	postTo(server, "/result", fmt.Sprintf("player_id=%d&stage_id=1&chapter_id=2&clear_flag=1&campaign_flag=1", player.ID))
 

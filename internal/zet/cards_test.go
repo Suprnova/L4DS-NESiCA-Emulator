@@ -26,7 +26,7 @@ func newServer(t *testing.T) (*zet.Server, *store.Store) {
 
 func TestServer_Select_ReturnsTheStoredPlayer(t *testing.T) {
 	server, s := newServer(t)
-	player, _ := s.Register("7020392000000001", "Survivor", 0)
+	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
 	s.RecordResult(player.ID, store.Result{Zet: 568, Score: 195})
 
 	reply, err := server.Select("7020392000000001")
@@ -40,7 +40,7 @@ func TestServer_Select_ReturnsTheStoredPlayer(t *testing.T) {
 
 func TestServer_Select_ReportsExperienceAndLoginsAfterTheEmptyBlocks(t *testing.T) {
 	server, s := newServer(t)
-	player, _ := s.Register("7020392000000001", "Survivor", 0)
+	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
 	s.RecordResult(player.ID, store.Result{Exp: 222})
 	s.RecordLogin(player.ID)
 
@@ -54,7 +54,7 @@ func TestServer_Select_ReportsExperienceAndLoginsAfterTheEmptyBlocks(t *testing.
 
 func TestServer_Select_ReportsTheVersusRecordAfterTheLogins(t *testing.T) {
 	server, s := newServer(t)
-	player, _ := s.Register("7020392000000001", "Survivor", 0)
+	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
 	s.RecordResult(player.ID, store.Result{VSPlays: 3, VSWins: 2})
 
 	reply, _ := server.Select("7020392000000001")
@@ -67,7 +67,7 @@ func TestServer_Select_ReportsTheVersusRecordAfterTheLogins(t *testing.T) {
 
 func TestServer_Select_ReportsTheClasses(t *testing.T) {
 	server, s := newServer(t)
-	player, _ := s.Register("7020392000000001", "Survivor", 0)
+	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
 	s.RecordResult(player.ID, store.Result{CoopClassPoint: 120, CoopClassID: 3})
 
 	reply, _ := server.Select("7020392000000001")
@@ -75,6 +75,23 @@ func TestServer_Select_ReportsTheClasses(t *testing.T) {
 	got := strings.Split(reply.Body, "\n")[10:14]
 	if want := []string{"120", "0", "3", "1"}; !slices.Equal(got, want) {
 		t.Fatalf("class lines = %q, want %q", got, want)
+	}
+}
+
+func TestServer_Select_ReportsTheHomeStore(t *testing.T) {
+	s, err := store.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	server := zet.NewServer(s, zet.Catalog{StoreName: func(int64) string { return "Second Store" }})
+	s.Register("7020392000000001", "Survivor", 0, 2)
+
+	reply, _ := server.Select("7020392000000001")
+
+	got := strings.Split(reply.Body, "\n")[16:18]
+	if want := []string{"2", "Second Store"}; !slices.Equal(got, want) {
+		t.Fatalf("home store lines = %q, want %q", got, want)
 	}
 }
 
@@ -102,17 +119,17 @@ func TestServer_Insert_RegistersTheDecodedPlayer(t *testing.T) {
 	server, s := newServer(t)
 	name := url.QueryEscape(base64.StdEncoding.EncodeToString([]byte("Mika ミカ")))
 
-	body, err := server.Insert("7020392000000002", "tenpo_id=1,player_name="+name+",chara_id=3")
+	body, err := server.Insert("7020392000000002", "tenpo_id=2,player_name="+name+",chara_id=3")
 
 	player, _ := s.PlayerByCard("7020392000000002")
-	if err != nil || body != "1\n1\n"+strconv.FormatInt(player.ID, 10)+"\n" || player.Name != "Mika ミカ" || player.CharaID != 3 {
+	if err != nil || body != "1\n1\n"+strconv.FormatInt(player.ID, 10)+"\n" || player.Name != "Mika ミカ" || player.CharaID != 3 || player.HomeStore != 2 {
 		t.Fatalf("Insert() = %q, %v; player %+v", body, err, player)
 	}
 }
 
 func TestServer_Update_Name_RenamesThePlayer(t *testing.T) {
 	server, s := newServer(t)
-	s.Register("7020392000000002", "Mika", 0)
+	s.Register("7020392000000002", "Mika", 0, 1)
 	name := url.QueryEscape(base64.StdEncoding.EncodeToString([]byte("ノヴァ")))
 
 	err := server.Update("7020392000000002", 1, "request_flag=0,player_name="+name)
@@ -125,7 +142,7 @@ func TestServer_Update_Name_RenamesThePlayer(t *testing.T) {
 
 func TestServer_Update_UnknownType_ChangesNothing(t *testing.T) {
 	server, s := newServer(t)
-	s.Register("7020392000000002", "Mika", 0)
+	s.Register("7020392000000002", "Mika", 0, 1)
 
 	err := server.Update("7020392000000002", 2, "player_name=x")
 
@@ -137,7 +154,7 @@ func TestServer_Update_UnknownType_ChangesNothing(t *testing.T) {
 
 func TestServer_Insert_RegisteredCard_ReturnsAnError(t *testing.T) {
 	server, s := newServer(t)
-	s.Register("7020392000000002", "Mika", 0)
+	s.Register("7020392000000002", "Mika", 0, 1)
 
 	_, err := server.Insert("7020392000000002", "tenpo_id=1,player_name=,chara_id=1")
 
@@ -150,7 +167,7 @@ func TestServer_Select_ReportsTheLevelFromExperience(t *testing.T) {
 	s, _ := store.Open(":memory:")
 	t.Cleanup(func() { s.Close() })
 	server := zet.NewServer(s, zet.Catalog{Levels: game.Levels})
-	player, _ := s.Register("7020392000000001", "Survivor", 0)
+	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
 	s.RecordResult(player.ID, store.Result{Exp: 150})
 
 	reply, _ := server.Select("7020392000000001")

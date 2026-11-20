@@ -96,6 +96,7 @@ var migrations = []string{
 		vs_wins          INTEGER NOT NULL
 	);
 	CREATE INDEX results_by_time ON results (played_at)`,
+	`ALTER TABLE players ADD COLUMN home_store INTEGER NOT NULL DEFAULT 1`,
 }
 
 // settingsColumns lists the columns holding a player's [Settings], in field order.
@@ -127,7 +128,10 @@ type Player struct {
 	VSClassPoint   int64
 	VSPlays        int64
 	VSWins         int64
-	Settings       Settings
+	// HomeStore is the id of the store the player registered at, as cabinets know it. Players
+	// registered before home stores were recorded have store 1, the only store there was then.
+	HomeStore int64
+	Settings  Settings
 }
 
 // Settings are the options a player changes on the cabinet's settings screen. A new player has
@@ -259,15 +263,16 @@ func (s *Store) PlayerByCard(cardID string) (Player, error) {
 	return player, err
 }
 
-// Register creates a player and registers a card to them, or returns ErrAlreadyRegistered.
-func (s *Store) Register(cardID, name string, charaID int64) (Player, error) {
+// Register creates a player registered at the store homeStore and registers a card to them, or
+// returns ErrAlreadyRegistered.
+func (s *Store) Register(cardID, name string, charaID, homeStore int64) (Player, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return Player{}, err
 	}
 	defer tx.Rollback()
 
-	created, err := tx.Exec(`INSERT INTO players (name, chara_id) VALUES (?, ?)`, name, charaID)
+	created, err := tx.Exec(`INSERT INTO players (name, chara_id, home_store) VALUES (?, ?, ?)`, name, charaID, homeStore)
 	if err != nil {
 		return Player{}, err
 	}
@@ -447,13 +452,13 @@ func (s *Store) TopVersusPlayers(limit int) ([]Player, error) {
 
 // playerColumns lists the columns scanPlayer reads, in order.
 const playerColumns = `id, name, zet, exp, score, logins, chara_id,
-	coop_class_id, coop_class_point, vs_class_id, vs_class_point, vs_plays, vs_wins, ` + settingsColumns
+	coop_class_id, coop_class_point, vs_class_id, vs_class_point, vs_plays, vs_wins, home_store, ` + settingsColumns
 
 // scanPlayer reads a row of playerColumns, followed by any extra columns into extra.
 func scanPlayer(row interface{ Scan(...any) error }, extra ...any) (Player, error) {
 	var player Player
 	err := row.Scan(append([]any{&player.ID, &player.Name, &player.Zet, &player.Exp, &player.Score, &player.Logins, &player.CharaID,
-		&player.CoopClassID, &player.CoopClassPoint, &player.VSClassID, &player.VSClassPoint, &player.VSPlays, &player.VSWins,
+		&player.CoopClassID, &player.CoopClassPoint, &player.VSClassID, &player.VSClassPoint, &player.VSPlays, &player.VSWins, &player.HomeStore,
 		&player.Settings.MasterVolume, &player.Settings.BGMVolume, &player.Settings.MouseHorizontalReverse,
 		&player.Settings.MouseVerticalReverse, &player.Settings.MouseSensitivity, &player.Settings.MouseAcceleration,
 		&player.Settings.KeyMap}, extra...)...)

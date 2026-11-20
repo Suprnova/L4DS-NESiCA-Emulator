@@ -27,7 +27,7 @@ const card = "7020392000000100"
 
 func register(t *testing.T, s *store.Store) store.Player {
 	t.Helper()
-	player, err := s.Register(card, "Mika", 3)
+	player, err := s.Register(card, "Mika", 3, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,10 +67,10 @@ func TestRecordLogin_UnknownID_ReturnsErrNoPlayer(t *testing.T) {
 func TestRegister_NewCard_CreatesThePlayer(t *testing.T) {
 	s := openStore(t)
 
-	player, err := s.Register(card, "Mika", 3)
+	player, err := s.Register(card, "Mika", 3, 2)
 
 	found, _ := s.PlayerByCard(card)
-	if err != nil || player.ID == 0 || found.ID != player.ID || found.Name != "Mika" || found.CharaID != 3 {
+	if err != nil || player.ID == 0 || found.ID != player.ID || found.Name != "Mika" || found.CharaID != 3 || found.HomeStore != 2 {
 		t.Fatalf("Register() = %+v, %v; found %+v", player, err, found)
 	}
 }
@@ -79,7 +79,7 @@ func TestRegister_RegisteredCard_ReturnsErrAlreadyRegistered(t *testing.T) {
 	s := openStore(t)
 	register(t, s)
 
-	_, err := s.Register(card, "Other", 1)
+	_, err := s.Register(card, "Other", 1, 1)
 
 	if !errors.Is(err, store.ErrAlreadyRegistered) {
 		t.Fatalf("error = %v, want ErrAlreadyRegistered", err)
@@ -209,7 +209,7 @@ func TestOpen_DatabaseFromAnEarlierSchema_IsMigrated(t *testing.T) {
 func TestOpen_DatabaseWithCardsOnPlayers_MovesThemToTheirOwnTable(t *testing.T) {
 	path := t.TempDir() + "/cards.db"
 	s, _ := store.Open(path)
-	player, _ := s.Register(card, "Mika", 3)
+	player, _ := s.Register(card, "Mika", 3, 1)
 	s.RecordResult(player.ID, store.Result{StageID: 1, ChapterID: 1, Cleared: true})
 	s.Close()
 	old, _ := sql.Open("sqlite", path)
@@ -260,9 +260,9 @@ var monthStart = time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 
 func TestTopScorersSince_TotalsEachPlayersScoresInThePeriod(t *testing.T) {
 	s := openStore(t)
-	low, _ := s.Register("7020392000000001", "Low", 1)
-	high, _ := s.Register("7020392000000002", "High", 1)
-	s.Register("7020392000000003", "Unplayed", 1)
+	low, _ := s.Register("7020392000000001", "Low", 1, 1)
+	high, _ := s.Register("7020392000000002", "High", 1, 1)
+	s.Register("7020392000000003", "Unplayed", 1, 1)
 	s.RecordResult(low.ID, store.Result{Played: monthStart, Score: 50})
 	s.RecordResult(high.ID, store.Result{Played: monthStart.Add(time.Hour), Score: 40})
 	s.RecordResult(high.ID, store.Result{Played: monthStart.Add(2 * time.Hour), Score: 30})
@@ -291,7 +291,7 @@ func TestTopScorersSince_LeavesOutEarlierAndVersusResults(t *testing.T) {
 func TestTopScorersSince_StopsAtTheLimit(t *testing.T) {
 	s := openStore(t)
 	for i := range 3 {
-		player, _ := s.Register("702039200000000"+strconv.Itoa(i+1), "Player", 1)
+		player, _ := s.Register("702039200000000"+strconv.Itoa(i+1), "Player", 1, 1)
 		s.RecordResult(player.ID, store.Result{Played: monthStart, Score: 10})
 	}
 
@@ -304,9 +304,9 @@ func TestTopScorersSince_StopsAtTheLimit(t *testing.T) {
 
 func TestTopVersusPlayers_OrdersVersusPlayersByVersusClassPoints(t *testing.T) {
 	s := openStore(t)
-	low, _ := s.Register("7020392000000001", "Low", 1)
-	high, _ := s.Register("7020392000000002", "High", 1)
-	coop, _ := s.Register("7020392000000003", "Coop", 1)
+	low, _ := s.Register("7020392000000001", "Low", 1, 1)
+	high, _ := s.Register("7020392000000002", "High", 1, 1)
+	coop, _ := s.Register("7020392000000003", "Coop", 1, 1)
 	s.RecordResult(low.ID, store.Result{VSPlays: 1, VSClassPoint: 5})
 	s.RecordResult(high.ID, store.Result{VSPlays: 2, VSClassPoint: 40})
 	s.RecordResult(coop.ID, store.Result{Score: 100})

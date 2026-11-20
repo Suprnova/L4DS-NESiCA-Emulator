@@ -231,9 +231,9 @@ func field(entry []byte, at int) string {
 func storeMaster() *matching.Master {
 	names := map[int64]string{1: "Boba", 3: "Ellis"}
 	return matching.NewMaster(matching.Config{
-		Hosts:      servers(27020, 27021, 27022),
-		PlayerName: func(id int64) string { return names[id] },
-		StoreName:  "L4DS Emulator",
+		Hosts:       servers(27020, 27021, 27022),
+		PlayerName:  func(id int64) string { return names[id] },
+		PlayerStore: func(int64) string { return "L4DS Emulator" },
 	})
 }
 
@@ -245,7 +245,7 @@ func storeRoom(sequence, player, roomID string) matching.Query {
 
 func TestMaster_OpeningTheStoreLobby_ListsARoomOfTheirOwnWithoutAServer(t *testing.T) {
 	hosts := servers(27020)
-	master := matching.NewMaster(matching.Config{Hosts: hosts, PlayerName: func(int64) string { return "Boba" }, StoreName: "L4DS Emulator"})
+	master := matching.NewMaster(matching.Config{Hosts: hosts, PlayerName: func(int64) string { return "Boba" }, PlayerStore: func(int64) string { return "L4DS Emulator" }})
 
 	got := single(t, master.Reply(lan, storeQuery("11", "2", "1")))
 

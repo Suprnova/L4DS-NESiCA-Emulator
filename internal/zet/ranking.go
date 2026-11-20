@@ -26,8 +26,8 @@ const rankingSize = 10
 // total score of their results this calendar month (in the server's time zone), versus results
 // left out, and show their co-op class. The versus rankings order the players who have played
 // versus by versus class points over all time, show those as the score, and show their versus
-// class. Every player belongs to this server's one store, so the national and store rankings are
-// the same. Titles, class names, clans and avatars are empty.
+// class. Each player shows their home store. The store rankings are not limited to the asking
+// store, so they equal the national ones. Titles, class names, clans and avatars are empty.
 func (s *Server) Ranking(kind uint32) (string, error) {
 	entries, err := s.rankingEntries(kind == RankingNationalVersus || kind == RankingStoreVersus)
 	if err != nil {
@@ -37,7 +37,7 @@ func (s *Server) Ranking(kind uint32) (string, error) {
 	lines := []any{1, 1, len(entries)}
 	for rank, entry := range entries {
 		player := entry.player
-		lines = append(lines, rank+1, player.ID, entry.score, "", player.Name, s.levels.Level(player.Exp), entry.class, "", s.storeName, "", player.CharaID)
+		lines = append(lines, rank+1, player.ID, entry.score, "", player.Name, s.levels.Level(player.Exp), entry.class, "", s.storeName(player.HomeStore), "", player.CharaID)
 		if player.CharaID != 0 {
 			lines = append(lines, slices.Repeat([]any{0}, emptyAvatarLines)...)
 		}

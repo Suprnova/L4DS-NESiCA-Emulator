@@ -8,7 +8,8 @@ server:
 
   # The stores whose cabinets this server serves. A shim names its store by id, and a shim naming
   # a store not listed here is refused. The name and prefecture show on the cabinets' network
-  # screen, in room lists, and in rankings. The prefecture must not be empty.
+  # screen. A card's home store is the store it was registered at, and its name shows on the
+  # card, in room lists, and in rankings. The prefecture must not be empty.
   stores:
     - id: 1
       name: L4DS Emulator

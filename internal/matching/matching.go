@@ -220,8 +220,9 @@ type Config struct {
 	Hosts Hosts
 	// PlayerName returns a player's name for room lists. When nil, lists show player ids.
 	PlayerName func(playerID int64) string
-	// StoreName is the store shown for every member in room lists.
-	StoreName string
+	// PlayerStore returns the name of a player's home store for room lists. When nil, lists show
+	// no stores.
+	PlayerStore func(playerID int64) string
 	// VersusClass returns a player's versus class id, counted from 1, for versus rooms. When
 	// nil, every player is class 1.
 	VersusClass func(playerID int64) int
@@ -713,7 +714,9 @@ func (m *Master) appendEntry(b []byte, r *room, query Query) []byte {
 		if m.config.PlayerName != nil {
 			names[i] = m.config.PlayerName(member)
 		}
-		stores[i] = m.config.StoreName
+		if m.config.PlayerStore != nil {
+			stores[i] = m.config.PlayerStore(member)
+		}
 	}
 	asker := query.player()
 	me := 0xff

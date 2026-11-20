@@ -78,11 +78,11 @@ func Start(ctx context.Context, options Options) (*Server, error) {
 	}
 	s := &Server{players: players, closers: []func() error{players.Close}}
 
-	storeName := options.Config.Stores[0].Name
+	storeName := storeNames(options.Config.Stores)
 	rooms := matching.NewMaster(matching.Config{
 		Hosts:       hosts,
 		PlayerName:  playerName(players),
-		StoreName:   storeName,
+		PlayerStore: playerStore(players, storeName),
 		VersusClass: versusClass(players),
 	})
 	s.Backend = zet.NewServer(players, zet.Catalog{
@@ -185,6 +185,26 @@ func playerName(players *store.Store) func(int64) string {
 			return player.Name
 		}
 		return strconv.FormatInt(id, 10)
+	}
+}
+
+// storeNames returns a lookup of the names of the listed stores, "" for a store not listed.
+func storeNames(stores []config.Store) func(int64) string {
+	names := map[int64]string{}
+	for _, s := range stores {
+		names[int64(s.ID)] = s.Name
+	}
+	return func(id int64) string { return names[id] }
+}
+
+// playerStore returns a lookup of the names of players' home stores for room lists, "" for an
+// unknown player or a store no longer listed.
+func playerStore(players *store.Store, storeName func(int64) string) func(int64) string {
+	return func(id int64) string {
+		if player, err := players.Player(id); err == nil {
+			return storeName(player.HomeStore)
+		}
+		return ""
 	}
 }
 

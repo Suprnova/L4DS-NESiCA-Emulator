@@ -36,7 +36,7 @@ func (s *Server) Select(cardID string) (wire.CardReply, error) {
 		1, 1, cardID, player.ID, player.Name,
 		player.Zet, s.levels.Level(player.Exp), player.Score, "", "",
 		player.CoopClassPoint, player.VSClassPoint, player.CoopClassID, player.VSClassID,
-		0, "", 1, "", player.CharaID,
+		0, "", player.HomeStore, s.storeName(player.HomeStore), player.CharaID,
 	}
 	lines = append(lines, slices.Repeat([]any{0}, emptyAvatarLines)...)
 	lines = append(lines, 0, "", "", 0, player.Exp, 0)
@@ -61,12 +61,13 @@ func (s *Server) ReissueTest(cardID string) (wire.CardReply, error) {
 
 // Insert registers a player to a card from the game's key=value text, as in
 // "tenpo_id=1,player_name=<urlencoded base64 of the name>,chara_id=3", and answers with the
-// new player id.
+// new player id. The store the card is registered at becomes the player's home store.
 func (s *Server) Insert(cardID, data string) (string, error) {
 	fields := parseFields(data)
 	charaID, _ := strconv.ParseInt(fields["chara_id"], 10, 64)
+	homeStore, _ := strconv.ParseInt(fields["tenpo_id"], 10, 64)
 
-	player, err := s.store.Register(cardID, decodeName(fields["player_name"]), charaID)
+	player, err := s.store.Register(cardID, decodeName(fields["player_name"]), charaID, homeStore)
 	if err != nil {
 		return "", err
 	}
