@@ -14,6 +14,7 @@ import (
 	"go.yaml.in/yaml/v4"
 
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/hotkey"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/maintenance"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/zet"
 )
 
@@ -32,6 +33,27 @@ type Server struct {
 	Stores []Store      `yaml:"stores"`
 	Versus []VersusUnit `yaml:"versus"`
 	Events []Event      `yaml:"events"`
+	// Maintenance is when the server is down for maintenance; left out, never.
+	Maintenance Maintenance `yaml:"maintenance"`
+}
+
+// Maintenance configures the maintenance windows, during which games are offline in maintenance.
+type Maintenance struct {
+	// Warn is how long before a window games are told it is coming, such as "30m"; 0 or left out,
+	// they are not told.
+	Warn time.Duration `yaml:"warn"`
+	// DailyStart and DailyEnd are a window every day, as "HH:MM" in the server's time zone; an end
+	// at or before the start runs past midnight. Both or neither are given.
+	DailyStart string `yaml:"daily_start"`
+	DailyEnd   string `yaml:"daily_end"`
+	// Windows are one-off windows, which may overlap or extend the daily one.
+	Windows []MaintenanceWindow `yaml:"windows"`
+}
+
+// MaintenanceWindow is a one-off maintenance window.
+type MaintenanceWindow struct {
+	Start time.Time `yaml:"start"`
+	End   time.Time `yaml:"end"`
 }
 
 // Store is a store the server serves, as its cabinets report it to the game.
@@ -191,7 +213,7 @@ func (s *Shim) resolve() error {
 }
 
 // check reports the first problem with the server section: no stores, a store id listed twice, a
-// store without a prefecture, or a schedule entry the game cannot take.
+// store without a prefecture, a schedule entry the game cannot take, or a bad maintenance window.
 func (s Server) check() error {
 	if len(s.Stores) == 0 {
 		return errors.New("server.stores must list at least one store")
@@ -206,8 +228,46 @@ func (s Server) check() error {
 			return fmt.Errorf("store %d: prefecture must not be empty", store.ID)
 		}
 	}
-	_, err := s.Schedule()
+	if _, err := s.Schedule(); err != nil {
+		return err
+	}
+	_, err := s.Maintenance.Schedule()
 	return err
+}
+
+// Schedule returns the maintenance windows, or the first one the configuration gets wrong.
+func (m Maintenance) Schedule() (maintenance.Schedule, error) {
+	if m.Warn < 0 {
+		return maintenance.Schedule{}, fmt.Errorf("maintenance.warn %s is negative", m.Warn)
+	}
+	schedule := maintenance.Schedule{Warn: m.Warn}
+	if (m.DailyStart == "") != (m.DailyEnd == "") {
+		return maintenance.Schedule{}, errors.New("maintenance: daily_start and daily_end go together")
+	}
+	if m.DailyStart != "" {
+		start, errStart := clock(m.DailyStart)
+		end, errEnd := clock(m.DailyEnd)
+		if err := errors.Join(errStart, errEnd); err != nil {
+			return maintenance.Schedule{}, fmt.Errorf("maintenance: %w", err)
+		}
+		schedule.Daily = &maintenance.Daily{Start: start, End: end}
+	}
+	for _, w := range m.Windows {
+		if !w.End.After(w.Start) {
+			return maintenance.Schedule{}, fmt.Errorf("maintenance window from %s: end %s is not after the start", w.Start, w.End)
+		}
+		schedule.Windows = append(schedule.Windows, maintenance.Window{Start: w.Start, End: w.End})
+	}
+	return schedule, nil
+}
+
+// clock reads an "HH:MM" time of day as the time since midnight.
+func clock(text string) (time.Duration, error) {
+	parsed, err := time.Parse("15:04", text)
+	if err != nil {
+		return 0, fmt.Errorf("time of day %q is not HH:MM", text)
+	}
+	return time.Duration(parsed.Hour())*time.Hour + time.Duration(parsed.Minute())*time.Minute, nil
 }
 
 // difficulties maps difficulty names to the game's difficulty plus 1.

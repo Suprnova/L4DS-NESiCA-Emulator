@@ -255,3 +255,48 @@ func TestLoad_BadCardKeys_AreErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestLoad_Maintenance_ReadsTheWindows(t *testing.T) {
+	path := writeConfig(t, `
+server:
+  maintenance:
+    warn: 30m
+    daily_start: "06:00"
+    daily_end: "08:00"
+    windows:
+      - start: 2026-12-24T00:00:00+09:00
+        end: 2026-12-24T08:00:00+09:00
+`)
+
+	loaded, err := config.Load(path)
+	got, scheduleErr := loaded.Server.Maintenance.Schedule()
+
+	if err != nil || scheduleErr != nil || got.Warn != 30*time.Minute || got.Daily == nil || got.Daily.Start != 6*time.Hour || got.Daily.End != 8*time.Hour ||
+		len(got.Windows) != 1 || got.Windows[0].End.Sub(got.Windows[0].Start) != 8*time.Hour {
+		t.Fatalf("Schedule() = %+v, %v (load %v)", got, scheduleErr, err)
+	}
+}
+
+func TestLoad_MaintenanceDailyStartWithoutEnd_IsAnError(t *testing.T) {
+	_, err := config.Load(writeConfig(t, "server:\n  maintenance:\n    daily_start: \"06:00\"\n"))
+
+	if err == nil {
+		t.Fatal("Load() error = nil")
+	}
+}
+
+func TestLoad_MaintenanceWindowEndingBeforeItStarts_IsAnError(t *testing.T) {
+	path := writeConfig(t, `
+server:
+  maintenance:
+    windows:
+      - start: 2026-12-24T08:00:00+09:00
+        end: 2026-12-24T06:00:00+09:00
+`)
+
+	_, err := config.Load(path)
+
+	if err == nil {
+		t.Fatal("Load() error = nil")
+	}
+}
