@@ -62,17 +62,64 @@ func stageLines(clears []store.Clear) []string {
 	return lines
 }
 
-// slotLines are the lines after the stage progress: release_difficulty, paid_membersihp, the
-// daily_quest flag and the period_bonus count, all 0, then item_slot and weapon_slot, which open
-// every skill item and weapon slot.
-var slotLines = []string{"0", "0", "0", "0", strconv.Itoa(store.Slots), strconv.Itoa(store.Slots)}
+// membershipLines are the lines after the stage progress: release_difficulty 0, paid_membersihp
+// 1, which lets the reward pop-up set a weapon or skill item into a free slot, and the daily_quest
+// flag 0.
+var membershipLines = []string{"0", "1", "0"}
 
-// login counts the login and answers with a success header, no bonuses, the player's settings,
-// their stage progress, and every slot open. A guest gets the default settings and no progress.
+// slotLines are item_slot and weapon_slot, which open every skill item and weapon slot.
+var slotLines = []string{strconv.Itoa(store.Slots), strconv.Itoa(store.Slots)}
+
+// periodBonusLines lists the period_bonus group: the number of grants, then for each its id,
+// name, and ZG, and its item block (id, category, name, count, resource id, color index, replace,
+// and rare). A weapon's resource id is its id; everything else has 0.
+func periodBonusLines(grants []Grant) []string {
+	lines := []string{strconv.Itoa(len(grants))}
+	for _, g := range grants {
+		resource := int64(0)
+		if g.Item.Kind == store.Weapon {
+			resource = g.Item.ItemID
+		}
+		lines = append(lines, strconv.Itoa(g.ID), g.Name, strconv.FormatInt(g.Zet, 10),
+			strconv.FormatInt(g.Item.ItemID, 10), strconv.FormatInt(int64(g.Item.Kind), 10), g.Item.Name,
+			strconv.FormatInt(g.Item.Count, 10), strconv.FormatInt(resource, 10), "0", "0", "0")
+	}
+	return lines
+}
+
+// deliverGrants gives a player the grants open now that they have not had, and returns them.
+func (s *Server) deliverGrants(playerID int64) []Grant {
+	now := s.now()
+	var delivered []Grant
+	for _, g := range s.schedule.Grants {
+		if !g.Open(now) {
+			continue
+		}
+		var items []store.Owned
+		if g.Item.Kind == store.Weapon || g.Item.Kind == store.SkillItem {
+			items = append(items, g.Item)
+		}
+		ok, err := s.store.Deliver(playerID, int64(g.ID), now, g.Zet, items...)
+		if err != nil {
+			slog.Error("deliver grant", "player", playerID, "grant", g.ID, "error", err)
+			continue
+		}
+		if ok {
+			slog.Info("grant delivered", "player", playerID, "grant", g.ID, "name", g.Name)
+			delivered = append(delivered, g)
+		}
+	}
+	return delivered
+}
+
+// login counts the login, delivers the open grants the player has not had, and answers with a
+// success header, the player's settings, their stage progress, the grants, and every slot open.
+// A guest gets the default settings, no progress, and no grants.
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	playerID := formInt(r, "player_id")
 	settings := store.DefaultSettings
 	var clears []store.Clear
+	var grants []Grant
 	if !guest(playerID) {
 		if err := s.store.RecordLogin(playerID); err != nil {
 			slog.Error("record login", "player", playerID, "error", err)
@@ -84,6 +131,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		if clears, err = s.store.Clears(playerID); err != nil {
 			slog.Error("load clears", "player", playerID, "error", err)
 		}
+		grants = s.deliverGrants(playerID)
 	}
 
 	lines := []string{"1", "1", "0"}
@@ -96,6 +144,8 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	lines = append(lines, stageLines(clears)...)
+	lines = append(lines, membershipLines...)
+	lines = append(lines, periodBonusLines(grants)...)
 	lines = append(lines, slotLines...)
 	w.Write([]byte(strings.Join(lines, "\n") + "\n"))
 }

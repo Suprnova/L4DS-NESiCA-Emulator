@@ -139,7 +139,7 @@ func Start(ctx context.Context, options Options) (*Server, error) {
 			close(s.poolDone)
 		}()
 	}
-	slog.Info("server started", "stores", len(options.Config.Stores), "versus units", len(schedule.Versus), "events", len(schedule.Events))
+	slog.Info("server started", "stores", len(options.Config.Stores), "versus units", len(schedule.Versus), "events", len(schedule.Events), "grants", len(schedule.Grants))
 	return s, nil
 }
 

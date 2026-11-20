@@ -1,5 +1,6 @@
 // Package config reads the configuration file of the server, the shim, or both: the stores the
-// server serves, its versus schedule and events, and the shim's server, store, server key, and card keys.
+// server serves, its versus schedule, events, grants, and maintenance windows, and the shim's
+// server, store, server key, and card keys.
 package config
 
 import (
@@ -15,6 +16,7 @@ import (
 
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/hotkey"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/maintenance"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/store"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/zet"
 )
 
@@ -33,6 +35,7 @@ type Server struct {
 	Stores []Store      `yaml:"stores"`
 	Versus []VersusUnit `yaml:"versus"`
 	Events []Event      `yaml:"events"`
+	Grants []Grant      `yaml:"grants"`
 	// Maintenance is when the server is down for maintenance; left out, never.
 	Maintenance Maintenance `yaml:"maintenance"`
 }
@@ -135,6 +138,32 @@ type Event struct {
 	// before the open runs past midnight.
 	DailyOpen  string `yaml:"daily_open"`
 	DailyClose string `yaml:"daily_close"`
+}
+
+// Grant is a gift every card gets once, at its first login from Start until End: ZG, an item, or
+// both, shown in the login's reward pop-up under its name.
+type Grant struct {
+	// ID tells grants apart: a card gets each id once, so an id must not be reused for another
+	// grant. It is at least 1.
+	ID    int       `yaml:"id"`
+	Name  string    `yaml:"name"`
+	Start time.Time `yaml:"start"`
+	End   time.Time `yaml:"end"`
+	Zet   int64     `yaml:"zet"`
+	// Item is the item given; left out, none.
+	Item *GrantItem `yaml:"item"`
+}
+
+// GrantItem is the item a grant gives.
+type GrantItem struct {
+	// Category is weapon, skill_item, or svp.
+	Category string `yaml:"category"`
+	// ID is the weapon's or skill item's database id in the game's catalogue; svp has none.
+	ID int64 `yaml:"id"`
+	// Name is shown in the pop-up, and on the card once the item is set; svp has none.
+	Name string `yaml:"name"`
+	// Count is how many, or for svp the seconds.
+	Count int64 `yaml:"count"`
 }
 
 // Default is the configuration without a file: a server on port 8080 serving store 1, the
@@ -276,7 +305,7 @@ var difficulties = map[string]int{"easy": 1, "normal": 2, "advanced": 3, "expert
 // eventTypes maps event type names to the game's event types.
 var eventTypes = map[string]int{"national": zet.EventNational, "store": zet.EventStore, "national_ex": zet.EventNationalEX, "store_ex": zet.EventStoreEX}
 
-// Schedule returns the versus units and events as the game server offers them.
+// Schedule returns the versus units, events, and grants as the game server offers them.
 func (s Server) Schedule() (zet.Schedule, error) {
 	var schedule zet.Schedule
 	for _, unit := range s.Versus {
@@ -319,7 +348,55 @@ func (s Server) Schedule() (zet.Schedule, error) {
 			Open: event.Open, Close: event.Close, DailyOpen: dailyOpen, DailyClose: dailyClose,
 		})
 	}
+	ids := map[int]bool{}
+	for _, grant := range s.Grants {
+		if ids[grant.ID] {
+			return zet.Schedule{}, fmt.Errorf("grant %d is listed twice", grant.ID)
+		}
+		ids[grant.ID] = true
+		converted, err := grant.convert()
+		if err != nil {
+			return zet.Schedule{}, fmt.Errorf("grant %d: %w", grant.ID, err)
+		}
+		schedule.Grants = append(schedule.Grants, converted)
+	}
 	return schedule, nil
+}
+
+// itemCategories maps grant item categories to the game's item categories.
+var itemCategories = map[string]store.ItemKind{"weapon": store.Weapon, "skill_item": store.SkillItem, "svp": store.SVP}
+
+// convert returns the grant as the game server hands it out, or what the configuration gets
+// wrong: an id below 1, no name, an end not after the start, negative ZG, nothing to give, or an
+// item without a known category, a count, or (unless svp) an id and a name.
+func (g Grant) convert() (zet.Grant, error) {
+	switch {
+	case g.ID < 1:
+		return zet.Grant{}, errors.New("id must be at least 1")
+	case g.Name == "":
+		return zet.Grant{}, errors.New("name must not be empty")
+	case !g.End.After(g.Start):
+		return zet.Grant{}, fmt.Errorf("end %s is not after the start %s", g.End, g.Start)
+	case g.Zet < 0:
+		return zet.Grant{}, errors.New("zet is negative")
+	case g.Zet == 0 && g.Item == nil:
+		return zet.Grant{}, errors.New("gives neither zet nor an item")
+	}
+	grant := zet.Grant{ID: g.ID, Name: g.Name, Start: g.Start, End: g.End, Zet: g.Zet}
+	if g.Item == nil {
+		return grant, nil
+	}
+	kind, ok := itemCategories[g.Item.Category]
+	switch {
+	case !ok:
+		return zet.Grant{}, fmt.Errorf("unknown item category %q", g.Item.Category)
+	case g.Item.Count < 1:
+		return zet.Grant{}, errors.New("item count must be at least 1")
+	case kind != store.SVP && (g.Item.ID < 1 || g.Item.Name == ""):
+		return zet.Grant{}, fmt.Errorf("a %s needs an id and a name", g.Item.Category)
+	}
+	grant.Item = store.Owned{Kind: kind, ItemID: g.Item.ID, Name: g.Item.Name, Count: g.Item.Count}
+	return grant, nil
 }
 
 func lookup(what string, id int, key string, values map[string]int, name string) (int, error) {

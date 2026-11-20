@@ -5,14 +5,37 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/store"
 )
 
-// Schedule is what the game can play besides the stage list: the national versus schedule and
-// the events. The game fetches both once at startup.
+// Schedule is what the game can play besides the stage list, the national versus schedule and
+// the events, which the game fetches once at startup; and the grants handed out at login.
 type Schedule struct {
 	Versus []VersusUnit
 	Events []Event
+	Grants []Grant
 }
+
+// Grant is a gift every card gets once, at its first login while the grant is open, from Start
+// until End. The login's reward pop-up shows it under its name: a page for its ZG when it has
+// any, then one for its item.
+type Grant struct {
+	// ID tells grants apart: a card that had the grant with an id does not get it again.
+	ID   int
+	Name string
+	// Start and End bound when the grant is open: from Start, until End.
+	Start, End time.Time
+	// Zet is the ZG given, added to the player's ZG.
+	Zet int64
+	// Item is the item given, or none when its Kind is 0. A weapon or skill item is then owned
+	// by the player, who can set it into a slot from the pop-up; SVP is credited by the game
+	// itself, and Count is then the seconds.
+	Item store.Owned
+}
+
+// Open reports whether the grant is open at t.
+func (g Grant) Open(t time.Time) bool { return !t.Before(g.Start) && t.Before(g.End) }
 
 // VersusUnit is one map of the national versus schedule. The mode select offers versus while a
 // unit's window is open; a window whose start equals its end is never open.

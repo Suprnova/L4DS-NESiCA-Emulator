@@ -261,7 +261,7 @@ func TestHandler_Login_ReportsClearedStagesAfterTheConfig(t *testing.T) {
 func TestHandler_Login_OpensEverySlotAfterTheStageProgress(t *testing.T) {
 	got := strings.Split(post(t, "/login", "player_id=-1"), "\n")[3+5+25+4+1:]
 
-	if want := []string{"0", "0", "0", "0", "4", "4", ""}; !slices.Equal(got, want) {
+	if want := []string{"0", "1", "0", "0", "4", "4", ""}; !slices.Equal(got, want) {
 		t.Fatalf("lines after the stages = %q, want %q", got, want)
 	}
 }

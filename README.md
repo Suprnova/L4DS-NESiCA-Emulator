@@ -9,6 +9,7 @@ A server for the online services of the defunct arcade game *Left 4 Dead: Surviv
 In development. Everything runs on one Windows PC today, through `l4ds-aio`:
 
 - card registration, login, saved progress, classes, and settings;
+- carried weapons and skill items, and gifts handed out at login;
 - single play, national co-op, store co-op, Versus Survival, and events, with up to two copies of the game on the same PC;
 - rankings from the saved players on the attract screen.
 
@@ -41,7 +42,7 @@ Run these from the repository.
 
    The name is the `server_key` in the configuration file; if you change one, change the other. A DNS server on your network that resolves the name works too, in place of the hosts file.
 
-3. **Configure the server.** Copy `l4ds.example.yaml` and adjust it: in the `server` section the store's name and prefecture, the versus schedule, and the events; in the `shim` section the server key, the netcon port, and your card keys. Every setting is described in the file. Without a configuration file nothing is scheduled, and versus and the event modes stay unavailable.
+3. **Configure the server.** Copy `l4ds.example.yaml` and adjust it: in the `server` section the store's name and prefecture, the versus schedule, the events, and the gifts handed out at login; in the `shim` section the server key, the netcon port, and your card keys. Every setting is described in the file. Without a configuration file nothing is scheduled, and versus and the event modes stay unavailable.
 
 4. **Start the server** and wait for `dedicated server ready` before creating a room:
 

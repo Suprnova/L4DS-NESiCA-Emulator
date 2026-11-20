@@ -11,6 +11,7 @@ import (
 
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/config"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/hotkey"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/store"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/zet"
 )
 
@@ -298,5 +299,64 @@ server:
 
 	if err == nil {
 		t.Fatal("Load() error = nil")
+	}
+}
+
+func TestSchedule_ConvertsAGrant(t *testing.T) {
+	path := writeConfig(t, `server:
+  grants:
+    - id: 3
+      name: Welcome
+      start: 2026-11-01T08:00:00Z
+      end: 2026-12-01T08:00:00Z
+      zet: 500
+      item:
+        category: weapon
+        id: 6
+        name: AK-47
+        count: 5
+`)
+	loaded, _ := config.Load(path)
+
+	got, err := loaded.Server.Schedule()
+
+	if err != nil || len(got.Grants) != 1 {
+		t.Fatalf("Schedule() = %+v, %v", got, err)
+	}
+	grant := got.Grants[0]
+	want := store.Owned{Kind: store.Weapon, ItemID: 6, Name: "AK-47", Count: 5}
+	if grant.ID != 3 || grant.Name != "Welcome" || grant.Zet != 500 || grant.Item != want ||
+		!grant.Start.Equal(time.Date(2026, 11, 1, 8, 0, 0, 0, time.UTC)) || !grant.End.Equal(time.Date(2026, 12, 1, 8, 0, 0, 0, time.UTC)) {
+		t.Fatalf("Grants[0] = %+v", grant)
+	}
+}
+
+func TestLoad_BadGrants_AreErrors(t *testing.T) {
+	const window = "      start: 2026-11-01T08:00:00Z\n      end: 2026-12-01T08:00:00Z\n"
+	grants := map[string]string{
+		"no id":           "    - name: A\n      zet: 1\n" + window,
+		"no name":         "    - id: 1\n      zet: 1\n" + window,
+		"nothing given":   "    - id: 1\n      name: A\n" + window,
+		"ends at start":   "    - id: 1\n      name: A\n      zet: 1\n      start: 2026-11-01T08:00:00Z\n      end: 2026-11-01T08:00:00Z\n",
+		"listed twice":    "    - id: 1\n      name: A\n      zet: 1\n" + window + "    - id: 1\n      name: B\n      zet: 1\n" + window,
+		"unknown item":    "    - id: 1\n      name: A\n" + window + "      item: {category: hat, id: 1, name: Hat, count: 1}\n",
+		"no item count":   "    - id: 1\n      name: A\n" + window + "      item: {category: weapon, id: 6, name: AK-47}\n",
+		"weapon, no name": "    - id: 1\n      name: A\n" + window + "      item: {category: weapon, id: 6, count: 1}\n",
+	}
+
+	for name, grant := range grants {
+		if _, err := config.Load(writeConfig(t, "server:\n  grants:\n"+grant)); err == nil {
+			t.Errorf("%s: Load() error = nil", name)
+		}
+	}
+}
+
+func TestLoad_SVPGrant_NeedsNoIDOrName(t *testing.T) {
+	path := writeConfig(t, "server:\n  grants:\n    - id: 1\n      name: Bonus\n      start: 2026-11-01T08:00:00Z\n      end: 2026-12-01T08:00:00Z\n      item: {category: svp, count: 900}\n")
+
+	_, err := config.Load(path)
+
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
 	}
 }

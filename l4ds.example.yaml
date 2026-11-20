@@ -61,6 +61,25 @@ server:
       name: サンプル店内イベント
       detail: l4ds-aio の試験用イベントです。
 
+  # Grants: gifts every card gets once, at its first login from start until end, shown in the
+  # login's reward pop-up under their name. A grant gives zet (ZG), an item, or both. An item's
+  # category is weapon, skill_item, or svp; a weapon or skill item needs the id from the game's
+  # catalogue and the name the card shows (weapon names exist only here: the game has none in
+  # Japanese), and becomes the player's own, which the pop-up offers to set into a free slot. svp
+  # needs only a count, in seconds, and lasts the session. A card gets each id once, so give a new
+  # grant a new id.
+  grants:
+    - id: 1
+      name: サンプル配布
+      start: 2026-01-01T00:00:00+09:00
+      end: 2031-01-01T00:00:00+09:00
+      zet: 500
+      item:
+        category: weapon
+        id: 6
+        name: AK-47
+        count: 5
+
   # Maintenance windows. During a window every game is offline in maintenance; warn ahead of one,
   # games are told it is coming and count down the minutes. daily_start and daily_end are a window
   # every day as HH:MM in the server's time zone (an end before the start runs past midnight);
