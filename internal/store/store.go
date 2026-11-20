@@ -106,6 +106,20 @@ var migrations = []string{
 		count     INTEGER NOT NULL,
 		PRIMARY KEY (player_id, kind, slot)
 	)`,
+	`CREATE TABLE owned_items (
+		player_id INTEGER NOT NULL REFERENCES players (id),
+		kind      INTEGER NOT NULL,
+		item_id   INTEGER NOT NULL,
+		name      TEXT    NOT NULL,
+		count     INTEGER NOT NULL,
+		PRIMARY KEY (player_id, kind, item_id)
+	);
+	CREATE TABLE grant_deliveries (
+		player_id    INTEGER NOT NULL REFERENCES players (id),
+		grant_id     INTEGER NOT NULL,
+		delivered_at INTEGER NOT NULL,
+		PRIMARY KEY (player_id, grant_id)
+	)`,
 }
 
 // settingsColumns lists the columns holding a player's [Settings], in field order.

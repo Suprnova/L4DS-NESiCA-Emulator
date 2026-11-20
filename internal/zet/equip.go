@@ -1,6 +1,7 @@
 package zet
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -13,11 +14,11 @@ import (
 // equipFailed is the equip reply that sets nothing: result 0, which the game takes as a failure.
 const equipFailed = "1\n0\n0\n"
 
-// equip puts item_num of the item item_id, of category item_cgr_id, in the player's slot_id, and
-// answers with slot_set_num, the slot's new count, which the game shows as the slot's count
-// (GameUI 0x10056d40 for a weapon, 0x10056e70 for a skill item). Only weapons and skill items
-// are kept; other categories, a guest, a slot outside 1 to [store.Slots], and a count below 1
-// get the failure reply.
+// equip moves item_num of the item item_id, of category item_cgr_id, from the player's owned
+// items into their slot_id, and answers with slot_set_num, the slot's new count, which the game
+// shows as the slot's count (GameUI 0x10056d40 for a weapon, 0x10056e70 for a skill item). Only
+// weapons and skill items are kept; other categories, a guest, a slot outside 1 to
+// [store.Slots], a count below 1, and an item the player does not own get the failure reply.
 func (s *Server) equip(w http.ResponseWriter, r *http.Request) {
 	playerID, kind := formInt(r, "player_id"), store.ItemKind(formInt(r, "item_cgr_id"))
 	if kind != store.Weapon && kind != store.SkillItem {
@@ -25,20 +26,24 @@ func (s *Server) equip(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(equipFailed))
 		return
 	}
-	item := store.Equipped{Kind: kind, Slot: formInt(r, "slot_id"), ItemID: formInt(r, "item_id"), Count: formInt(r, "item_num")}
-	if guest(playerID) || item.Slot < 1 || item.Slot > store.Slots || item.Count < 1 {
-		slog.Warn("equip refused", "player", playerID, "item", item)
+	slot, itemID, n := formInt(r, "slot_id"), formInt(r, "item_id"), formInt(r, "item_num")
+	if guest(playerID) || slot < 1 || slot > store.Slots || n < 1 {
+		slog.Warn("equip refused", "player", playerID, "kind", kind, "slot", slot, "item", itemID, "count", n)
 		w.Write([]byte(equipFailed))
 		return
 	}
 
-	count, err := s.store.Equip(playerID, item)
-	if err != nil {
-		slog.Error("equip", "player", playerID, "item", item, "error", err)
+	count, err := s.store.Equip(playerID, kind, slot, itemID, n)
+	switch {
+	case errors.Is(err, store.ErrNotOwned):
+		slog.Warn("equip refused: item not owned", "player", playerID, "kind", kind, "item", itemID)
 		w.Write([]byte(equipFailed))
-		return
+	case err != nil:
+		slog.Error("equip", "player", playerID, "kind", kind, "slot", slot, "item", itemID, "error", err)
+		w.Write([]byte(equipFailed))
+	default:
+		fmt.Fprintf(w, "%s%d\n", successHeader, count)
 	}
-	fmt.Fprintf(w, "%s%d\n", successHeader, count)
 }
 
 // fluctuationFields are the result fields that report how many of each kind of item the chapter

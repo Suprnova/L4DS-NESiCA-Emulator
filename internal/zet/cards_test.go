@@ -98,8 +98,9 @@ func TestServer_Select_ReportsTheHomeStore(t *testing.T) {
 func TestServer_Select_ListsTheSkillItemsAndWeaponsInTheirSlots(t *testing.T) {
 	server, s := newServer(t)
 	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
-	s.Equip(player.ID, store.Equipped{Kind: store.SkillItem, Slot: 2, ItemID: 30, Name: "Counter", Count: 3})
-	s.Equip(player.ID, store.Equipped{Kind: store.Weapon, Slot: 1, ItemID: 6, Name: "Rifle", Count: 5})
+	give(t, s, player.ID, store.Owned{Kind: store.SkillItem, ItemID: 30, Name: "Counter", Count: 3}, store.Owned{Kind: store.Weapon, ItemID: 6, Name: "Rifle", Count: 5})
+	s.Equip(player.ID, store.SkillItem, 2, 30, 3)
+	s.Equip(player.ID, store.Weapon, 1, 6, 5)
 
 	reply, _ := server.Select("7020392000000001")
 
