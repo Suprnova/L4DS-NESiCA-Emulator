@@ -95,6 +95,21 @@ func TestServer_Select_ReportsTheHomeStore(t *testing.T) {
 	}
 }
 
+func TestServer_Select_ListsTheSkillItemsAndWeaponsInTheirSlots(t *testing.T) {
+	server, s := newServer(t)
+	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
+	s.Equip(player.ID, store.Equipped{Kind: store.SkillItem, Slot: 2, ItemID: 30, Name: "Counter", Count: 3})
+	s.Equip(player.ID, store.Equipped{Kind: store.Weapon, Slot: 1, ItemID: 6, Name: "Rifle", Count: 5})
+
+	reply, _ := server.Select("7020392000000001")
+
+	got := strings.Split(reply.Body, "\n")[25:42]
+	want := []string{"1", "2", "30", "Counter", "3", "", "", "1", "1", "6", "Rifle", "5", "6", "0", "0", "0", "0"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("equipment lines = %q, want %q", got, want)
+	}
+}
+
 func TestServer_Select_UnregisteredCard_ReportsTheUnregisteredStatus(t *testing.T) {
 	server, _ := newServer(t)
 

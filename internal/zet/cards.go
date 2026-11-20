@@ -19,15 +19,19 @@ import (
 // slot's resource id, color index and replacement only when its id is not 0.
 const emptyAvatarLines = 6
 
-// Select answers a card lookup with the profile of the player registered to the card. An
-// unregistered card gets the card server's unregistered status and no profile. The avatar,
-// skill item, title and weapon blocks are empty, so the game uses its defaults, and
-// changed_equipment is 0, so the game reads no latest equipment set.
+// Select answers a card lookup with the profile of the player registered to the card, with the
+// skill items and weapons set in their slots. An unregistered card gets the card server's
+// unregistered status and no profile. The avatar and title blocks are empty, so the game uses
+// its defaults, and changed_equipment is 0, so the game reads no latest equipment set.
 func (s *Server) Select(cardID string) (wire.CardReply, error) {
 	player, err := s.store.PlayerByCard(cardID)
 	if errors.Is(err, store.ErrNotRegistered) {
 		return wire.CardReply{Status: wire.CardStatusUnregistered, Body: "0\n1\n" + cardID + "\n"}, nil
 	}
+	if err != nil {
+		return wire.CardReply{}, err
+	}
+	equipment, err := s.store.Equipment(player.ID)
 	if err != nil {
 		return wire.CardReply{}, err
 	}
@@ -39,9 +43,31 @@ func (s *Server) Select(cardID string) (wire.CardReply, error) {
 		0, "", player.HomeStore, s.storeName(player.HomeStore), player.CharaID,
 	}
 	lines = append(lines, slices.Repeat([]any{0}, emptyAvatarLines)...)
-	lines = append(lines, 0, "", "", 0, player.Exp, 0)
+	lines = append(lines, armedLines(equipment, store.SkillItem)...)
+	lines = append(lines, "", "")
+	lines = append(lines, armedLines(equipment, store.Weapon)...)
+	lines = append(lines, player.Exp, 0)
 	lines = append(lines, player.Logins, player.VSPlays, player.VSWins)
 	return wire.CardReply{Status: 1, Body: lineBody(lines)}, nil
+}
+
+// armedLines lists the card reply's block of the slots of kind: the number of slots, then each
+// slot's number, item id, name and count. A weapon adds its resource id, which is its item id,
+// and its color index, which is always 0.
+func armedLines(equipment []store.Equipped, kind store.ItemKind) []any {
+	var lines []any
+	n := 0
+	for _, item := range equipment {
+		if item.Kind != kind {
+			continue
+		}
+		n++
+		lines = append(lines, item.Slot, item.ItemID, item.Name, item.Count)
+		if kind == store.Weapon {
+			lines = append(lines, item.ItemID, 0)
+		}
+	}
+	return append([]any{n}, lines...)
 }
 
 // lineBody returns lines as a reply body, one value per line.
