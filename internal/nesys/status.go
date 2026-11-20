@@ -22,11 +22,14 @@ func NewStatus(current ...wire.Frame) *Status {
 }
 
 // Set makes current what games get when they connect from now on, and sends change to every
-// game connected now.
+// game connected now; an empty change is sent to none.
 func (s *Status) Set(current, change []wire.Frame) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.current = current
+	if len(change) == 0 {
+		return
+	}
 	for subscriber := range s.subscribers {
 		select {
 		case subscriber <- change:
@@ -82,6 +85,17 @@ func CertError(code uint32) wire.Frame {
 // NetworkRecover returns an NWRECOVER_NOTICE: the game is online again, and needs a CERT_INIT
 // notice after it to be certified again.
 func NetworkRecover() wire.Frame { return wire.Frame{Command: wire.NetworkRecoverNotice} }
+
+// MaintenanceComing returns a SOON_MAINTENANCE_NOTICE: maintenance starts in minutes, which the
+// game counts down in its info line, or "shortly" when minutes is 0.
+func MaintenanceComing(minutes int) wire.Frame {
+	return wire.Frame{Command: wire.SoonMaintenance, Payload: wire.MaintenanceWarning{Soon: true, Minutes: minutes}.Encode()}
+}
+
+// MaintenanceCleared returns a SOON_MAINTENANCE_NOTICE that clears a maintenance warning.
+func MaintenanceCleared() wire.Frame {
+	return wire.Frame{Command: wire.SoonMaintenance, Payload: wire.MaintenanceWarning{}.Encode()}
+}
 
 // CertInit returns the CERT_INIT notice certifying a cabinet in store with serverKey.
 func CertInit(store wire.StoreInfo, news wire.NewsImage, serverKey string) wire.Frame {

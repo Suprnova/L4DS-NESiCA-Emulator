@@ -58,3 +58,28 @@ func TestEncodeServiceVersion_LongVersion_KeepsTerminator(t *testing.T) {
 		t.Fatalf("payload = % X", payload)
 	}
 }
+
+func TestMaintenanceWarningEncode_Minutes_AreTextAfterTheFlag(t *testing.T) {
+	got := wire.MaintenanceWarning{Soon: true, Minutes: 25}.Encode()
+
+	want := append([]byte{1, 0, 0, 0, '2', '5'}, make([]byte, 14)...)
+	if !bytes.Equal(got, want) {
+		t.Fatalf("Encode() = %v, want %v", got, want)
+	}
+}
+
+func TestMaintenanceWarningEncode_NoMinutes_LeavesTheTextEmpty(t *testing.T) {
+	got := wire.MaintenanceWarning{Soon: true}.Encode()
+
+	if want := append([]byte{1, 0, 0, 0}, make([]byte, 16)...); !bytes.Equal(got, want) {
+		t.Fatalf("Encode() = %v, want %v", got, want)
+	}
+}
+
+func TestMaintenanceWarningEncode_NotSoon_ClearsTheWarning(t *testing.T) {
+	got := wire.MaintenanceWarning{Minutes: 25}.Encode()
+
+	if !bytes.Equal(got, make([]byte, 20)) {
+		t.Fatalf("Encode() = %v, want 20 zero bytes", got)
+	}
+}

@@ -1,6 +1,9 @@
 package wire
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+	"strconv"
+)
 
 const (
 	storeInfoSize     = 0x78
@@ -59,6 +62,30 @@ func (c CertInit) Encode() []byte {
 	buf := append(c.Store.encode(), c.News.encode()...)
 	buf = binary.LittleEndian.AppendUint32(buf, uint32(len(key)))
 	return append(buf, key...)
+}
+
+// MaintenanceWarning is the payload of the SoonMaintenance command, which warns of maintenance
+// (engine.dll 0x103776a8): u32 soon, then the minutes as text in a 16-byte field.
+type MaintenanceWarning struct {
+	// Soon makes the game warn that maintenance is coming; false clears a warning.
+	Soon bool
+	// Minutes is how long until maintenance starts, which the game counts down from in its info
+	// line; 0 sends no count, which the game shows as "maintenance shortly".
+	Minutes int
+}
+
+// Encode returns the payload bytes.
+func (s MaintenanceWarning) Encode() []byte {
+	buf := make([]byte, 4+16)
+	var minutes string
+	if s.Soon {
+		buf[0] = 1
+		if s.Minutes > 0 {
+			minutes = strconv.Itoa(s.Minutes)
+		}
+	}
+	putString(buf[4:], minutes)
+	return buf
 }
 
 // AdapterDetails is the payload of the AdapterInfoReply command: the cabinet's network adapter.

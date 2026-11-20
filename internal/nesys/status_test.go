@@ -60,3 +60,18 @@ func TestStatus_Set_IsWhatLaterGamesGet(t *testing.T) {
 		t.Fatalf("notice = %+v, %v", notice, err)
 	}
 }
+
+func TestStatus_SetWithNoChange_TellsConnectedGamesNothing(t *testing.T) {
+	status := nesys.NewStatus(nesys.MaintenanceComing(30))
+	game := serveStatus(t, status)
+	exchange(t, game, wire.ConnectRequest, nil)
+	wire.ReadFrame(game)
+
+	status.Set([]wire.Frame{nesys.MaintenanceComing(29)}, nil)
+	status.Set(nil, []wire.Frame{nesys.NetworkRecover()})
+
+	got, err := wire.ReadFrame(game)
+	if err != nil || got.Command != wire.NetworkRecoverNotice {
+		t.Fatalf("first notice = %+v, %v; want NWRECOVER_NOTICE", got, err)
+	}
+}
