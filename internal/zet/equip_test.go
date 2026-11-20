@@ -52,3 +52,22 @@ func TestHandler_Equip_UnkeptOrBadRequests_Fail(t *testing.T) {
 		t.Fatalf("equipment = %+v, want none", equipment)
 	}
 }
+
+func TestHandler_Result_TakesUsedItemsOffTheSlots(t *testing.T) {
+	server, s := newServer(t)
+	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
+	s.Equip(player.ID, store.Equipped{Kind: store.Weapon, Slot: 1, ItemID: 6, Count: 1})
+	s.Equip(player.ID, store.Equipped{Kind: store.SkillItem, Slot: 1, ItemID: 30, Count: 3})
+	s.Equip(player.ID, store.Equipped{Kind: store.SkillItem, Slot: 3, ItemID: 8, Count: 4})
+
+	postTo(server, "/result", fmt.Sprintf("player_id=%d&weapon_fluctuation=1%%3D-1&disposable_fluctuation=1%%3D-1%%2C3%%3D-2", player.ID))
+
+	got, _ := s.Equipment(player.ID)
+	want := []store.Equipped{
+		{Kind: store.SkillItem, Slot: 1, ItemID: 30, Count: 2},
+		{Kind: store.SkillItem, Slot: 3, ItemID: 8, Count: 2},
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("equipment = %+v, want %+v", got, want)
+	}
+}

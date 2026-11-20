@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/store"
 )
@@ -37,4 +39,39 @@ func (s *Server) equip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fmt.Fprintf(w, "%s%d\n", successHeader, count)
+}
+
+// fluctuationFields are the result fields that report how many of each kind of item the chapter
+// used up.
+var fluctuationFields = map[store.ItemKind]string{
+	store.Weapon:    "weapon_fluctuation",
+	store.SkillItem: "disposable_fluctuation",
+}
+
+// countChanges reads a result's fluctuation field, "<slot>=<change>" pairs joined by commas such
+// as "1=-1,3=-2", into the change per slot. Malformed pairs are skipped.
+func countChanges(field string) map[int64]int64 {
+	changes := map[int64]int64{}
+	for pair := range strings.SplitSeq(field, ",") {
+		slot, change, found := strings.Cut(pair, "=")
+		s, errSlot := strconv.ParseInt(slot, 10, 64)
+		c, errChange := strconv.ParseInt(change, 10, 64)
+		if found && errSlot == nil && errChange == nil {
+			changes[s] += c
+		}
+	}
+	return changes
+}
+
+// useItems takes the items a result reports used up off the player's slots.
+func (s *Server) useItems(playerID int64, r *http.Request) {
+	for kind, field := range fluctuationFields {
+		changes := countChanges(r.PostFormValue(field))
+		if len(changes) == 0 {
+			continue
+		}
+		if err := s.store.ChangeCounts(playerID, kind, changes); err != nil {
+			slog.Error("use items", "player", playerID, "field", field, "error", err)
+		}
+	}
 }

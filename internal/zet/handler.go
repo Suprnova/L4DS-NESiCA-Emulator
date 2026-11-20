@@ -140,8 +140,9 @@ func svp(w http.ResponseWriter, r *http.Request) {
 // versus points when game_mode, the matching mode, is a versus mode (7 to 10), co-op points
 // otherwise. A versus result also counts a versus play, and a win when vs_you_win is 1. A cleared
 // chapter counts towards the player's stage progress only when campaign_flag is 1, which the game
-// sets for co-op and single play (modes 1 and 5), not for events or versus. A guest's result is
-// not kept.
+// sets for co-op and single play (modes 1 and 5), not for events or versus. The weapons and skill
+// items the chapter used up (weapon_fluctuation and disposable_fluctuation) come off the player's
+// slots. A guest's result is not kept.
 func (s *Server) result(w http.ResponseWriter, r *http.Request) {
 	defer w.Write([]byte(successHeader))
 	playerID := formInt(r, "player_id")
@@ -171,6 +172,7 @@ func (s *Server) result(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.RecordResult(playerID, result); err != nil {
 		slog.Error("record result", "player", playerID, "error", err)
 	}
+	s.useItems(playerID, r)
 }
 
 // leaveRoom tells the matching master that a player left a room, and answers with a success
