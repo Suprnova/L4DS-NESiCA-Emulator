@@ -213,7 +213,7 @@ func TestOpen_DatabaseWithCardsOnPlayers_MovesThemToTheirOwnTable(t *testing.T) 
 	s.RecordResult(player.ID, store.Result{StageID: 1, ChapterID: 1, Cleared: true})
 	s.Close()
 	old, _ := sql.Open("sqlite", path)
-	old.Exec(`DROP TABLE results; DROP TABLE cards; ALTER TABLE players ADD COLUMN card_id TEXT; UPDATE players SET card_id = '` + card + `'; PRAGMA user_version = 17`)
+	old.Exec(`DROP TABLE equipment; DROP TABLE results; DROP TABLE cards; ALTER TABLE players ADD COLUMN card_id TEXT; UPDATE players SET card_id = '` + card + `'; PRAGMA user_version = 17`)
 	old.Close()
 
 	s, err := store.Open(path)

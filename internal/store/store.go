@@ -97,6 +97,15 @@ var migrations = []string{
 	);
 	CREATE INDEX results_by_time ON results (played_at)`,
 	`ALTER TABLE players ADD COLUMN home_store INTEGER NOT NULL DEFAULT 1`,
+	`CREATE TABLE equipment (
+		player_id INTEGER NOT NULL REFERENCES players (id),
+		kind      INTEGER NOT NULL,
+		slot      INTEGER NOT NULL,
+		item_id   INTEGER NOT NULL,
+		name      TEXT    NOT NULL,
+		count     INTEGER NOT NULL,
+		PRIMARY KEY (player_id, kind, slot)
+	)`,
 }
 
 // settingsColumns lists the columns holding a player's [Settings], in field order.
