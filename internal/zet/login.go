@@ -62,8 +62,13 @@ func stageLines(clears []store.Clear) []string {
 	return lines
 }
 
-// login counts the login and answers with a success header, no bonuses, the player's settings
-// and their stage progress. A guest gets the default settings and no progress.
+// slotLines are the lines after the stage progress: release_difficulty, paid_membersihp, the
+// daily_quest flag and the period_bonus count, all 0, then item_slot and weapon_slot, which open
+// every skill item and weapon slot.
+var slotLines = []string{"0", "0", "0", "0", strconv.Itoa(store.Slots), strconv.Itoa(store.Slots)}
+
+// login counts the login and answers with a success header, no bonuses, the player's settings,
+// their stage progress, and every slot open. A guest gets the default settings and no progress.
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	playerID := formInt(r, "player_id")
 	settings := store.DefaultSettings
@@ -91,5 +96,6 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	lines = append(lines, stageLines(clears)...)
+	lines = append(lines, slotLines...)
 	w.Write([]byte(strings.Join(lines, "\n") + "\n"))
 }

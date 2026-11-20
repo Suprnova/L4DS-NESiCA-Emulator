@@ -251,9 +251,17 @@ func TestHandler_Login_ReportsClearedStagesAfterTheConfig(t *testing.T) {
 
 	lines := strings.Split(postTo(server, "/login", fmt.Sprintf("player_id=%d", player.ID)), "\n")
 
-	got := lines[3+5+25+4:]
-	want := []string{"1", "1", "1", "2", "0", "2", "1", "1", "0", "2", "1", "0", ""}
+	got := lines[3+5+25+4 : 3+5+25+4+12]
+	want := []string{"1", "1", "1", "2", "0", "2", "1", "1", "0", "2", "1", "0"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("stage lines = %q, want %q", got, want)
+	}
+}
+
+func TestHandler_Login_OpensEverySlotAfterTheStageProgress(t *testing.T) {
+	got := strings.Split(post(t, "/login", "player_id=-1"), "\n")[3+5+25+4+1:]
+
+	if want := []string{"0", "0", "0", "0", "4", "4", ""}; !slices.Equal(got, want) {
+		t.Fatalf("lines after the stages = %q, want %q", got, want)
 	}
 }
