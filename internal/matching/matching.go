@@ -4,6 +4,7 @@ package matching
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/binary"
 	"fmt"
 	"log/slog"
@@ -618,10 +619,10 @@ func (m *Master) versusRoomOf(player int64) *room {
 	return nil
 }
 
-// decide closes a gathering versus room and gives each member a slot, alternating between the
-// survivors (slots 0 to 3) and the infected (4 to 7). A room with players on both sides gets a
-// server; a room left with one member gets none, and the game then reports that not enough
-// players were found. It returns the failure code to answer with, or 0.
+// decide closes a gathering versus room and gives each member a side (see [Master.sides]). A
+// room with players on both sides gets a server; a room left with one member gets none, and the
+// game then reports that not enough players were found. It returns the failure code to answer
+// with, or 0.
 func (m *Master) decide(host netip.Addr, r *room) byte {
 	if len(r.members) > 1 {
 		server, ok := m.host(host)
@@ -631,11 +632,24 @@ func (m *Master) decide(host netip.Addr, r *room) byte {
 		r.server = server
 	}
 	r.permission = versusDecided
-	r.slots = make([]byte, len(r.members))
-	for i := range r.slots {
-		r.slots[i] = byte(i/2 + i%2*versusPlayers/2)
-	}
+	r.slots = m.sides(r.members)
 	return 0
+}
+
+// sides returns each member's slot, survivors 0 to 3 and infected 4 to 7, balancing the sides by
+// versus class: from the highest class down (earlier joiners first among equals), the members go
+// to the survivors, the infected, the infected, the survivors, and so on.
+func (m *Master) sides(members []int64) []byte {
+	ranked := slices.Clone(members)
+	slices.SortStableFunc(ranked, func(a, b int64) int { return cmp.Compare(m.versusClass(b), m.versusClass(a)) })
+	slots := make([]byte, len(members))
+	var taken [2]byte
+	for rank, player := range ranked {
+		side := (rank + 1) / 2 % 2
+		slots[slices.Index(members, player)] = byte(side*versusPlayers/2) + taken[side]
+		taken[side]++
+	}
+	return slots
 }
 
 func (m *Master) enter(query Query) *room {

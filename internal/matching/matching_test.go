@@ -525,7 +525,7 @@ func TestMaster_EighthVersusPlayer_DecidesTheRoomAtOnce(t *testing.T) {
 
 	got := single(t, master.Reply(lan, versusQuery("12", "3", "8")))
 
-	if got[statusAt+1] != 0 || !slices.Equal(got[numbersAt:expireAt], []byte{1, 5, 2, 6, 3, 7, 4, 8}) {
+	if got[statusAt+1] != 0 || !slices.Equal(got[numbersAt:expireAt], []byte{1, 5, 6, 2, 3, 7, 8, 4}) {
 		t.Fatalf("permission %d, numbers %v", got[statusAt+1], got[numbersAt:expireAt])
 	}
 }
@@ -604,6 +604,20 @@ func TestMaster_DecidedVersusRoom_ShowsEachMembersVersusClass(t *testing.T) {
 
 	if !slices.Equal(got[classesAt:numbersAt], []byte{3, 5, 0, 0, 0, 0, 0, 0}) {
 		t.Fatalf("classes %v", got[classesAt:numbersAt])
+	}
+}
+
+func TestMaster_DecidedVersusRoom_BalancesTheSidesByVersusClass(t *testing.T) {
+	classes := map[int64]int{1: 1, 2: 7, 3: 4, 4: 6}
+	master := matching.NewMaster(matching.Config{Hosts: servers(27020), VersusClass: func(id int64) int { return classes[id] }})
+	for player := range 4 {
+		master.Reply(lan, versusQuery("11", "3", strconv.Itoa(player+1)))
+	}
+
+	got := single(t, master.Reply(lan, versusQuery("12", "4", "1")))
+
+	if !slices.Equal(got[numbersAt:expireAt], []byte{2, 1, 6, 5, 0, 0, 0, 0}) {
+		t.Fatalf("numbers %v", got[numbersAt:expireAt])
 	}
 }
 
