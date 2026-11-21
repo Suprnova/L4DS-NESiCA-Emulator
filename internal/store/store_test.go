@@ -235,7 +235,7 @@ func TestRecordResult_StoresTheResult(t *testing.T) {
 	err := s.RecordResult(player.ID, result)
 
 	results, _ := s.Results(player.ID)
-	if err != nil || len(results) != 1 || !results[0].Played.Equal(played) || results[0].GameMode != 7 || results[0].EventID != 3 || results[0].Score != 900 || results[0].VSClassPoint != -10 {
+	if err != nil || len(results) != 1 || !results[0].Played.Equal(played) || !results[0].Started.Equal(played) || results[0].GameMode != 7 || results[0].EventID != 3 || results[0].Score != 900 || results[0].VSClassPoint != -10 {
 		t.Fatalf("Results() = %+v, err = %v", results, err)
 	}
 }

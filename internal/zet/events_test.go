@@ -2,9 +2,11 @@ package zet_test
 
 import (
 	"fmt"
+	"net/url"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/calendar"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/store"
@@ -31,7 +33,7 @@ func eventResult(score int64) store.Result {
 }
 
 func TestHandler_Login_AfterAnEventRun_GivesTheRanksPrize(t *testing.T) {
-	now := on(4, 8, 9)
+	now := on(4, 9, 9)
 	server, s, player := campaignServer(t, &now, zet.Schedule{Events: []zet.Event{rankedEvent()}})
 	rival, _ := s.Register("7020392000000002", "Rival", 1, 1)
 	s.RecordResult(player, eventResult(500))
@@ -61,7 +63,7 @@ func TestHandler_Login_DuringAnEventRun_GivesNoPrize(t *testing.T) {
 }
 
 func TestHandler_Login_TiedEventTotals_ShareARank(t *testing.T) {
-	now := on(4, 8, 9)
+	now := on(4, 9, 9)
 	server, s, player := campaignServer(t, &now, zet.Schedule{Events: []zet.Event{rankedEvent()}})
 	first, _ := s.Register("7020392000000002", "First", 1, 1)
 	tied, _ := s.Register("7020392000000003", "Tied", 1, 1)
@@ -77,7 +79,7 @@ func TestHandler_Login_TiedEventTotals_ShareARank(t *testing.T) {
 }
 
 func TestHandler_Login_RankWithoutAPrize_GivesNothing(t *testing.T) {
-	now := on(4, 8, 9)
+	now := on(4, 9, 9)
 	server, s, player := campaignServer(t, &now, zet.Schedule{Events: []zet.Event{rankedEvent()}})
 	for i, score := range []int64{900, 800, 700} {
 		other, _ := s.Register(fmt.Sprintf("702039200000001%d", i), "Other", 1, 1)
@@ -90,8 +92,49 @@ func TestHandler_Login_RankWithoutAPrize_GivesNothing(t *testing.T) {
 	}
 }
 
-func TestHandler_Login_StoreEventPlays_DoNotCountForANationalEventWithItsID(t *testing.T) {
+func TestHandler_Login_BeforeTheResultsArePosted_GivesNoPrize(t *testing.T) {
+	now := on(4, 9, 7)
+	server, s, player := campaignServer(t, &now, zet.Schedule{Events: []zet.Event{rankedEvent()}})
+	s.RecordResult(player, eventResult(500))
+
+	if got := login(server, player); got[6] != "0" {
+		t.Fatalf("eventprizes count = %q, want 0", got[6])
+	}
+}
+
+func TestHandler_Login_ResultsAfter_PostsTheResultsThatLongAfterTheClose(t *testing.T) {
 	now := on(4, 8, 9)
+	event := rankedEvent()
+	event.ResultsAfter = time.Hour
+	server, s, player := campaignServer(t, &now, zet.Schedule{Events: []zet.Event{event}})
+	s.RecordResult(player, eventResult(500))
+
+	if got := login(server, player); got[6] != "2" {
+		t.Fatalf("eventprizes count = %q, want 2", got[6])
+	}
+}
+
+func TestHandler_ChapterStartedBeforeTheClose_CountsForTheRun(t *testing.T) {
+	now := on(4, 8, 8).Add(3 * time.Minute)
+	event := rankedEvent()
+	participation := zg("Hunt", 100)
+	event.Participation = &participation
+	server, s, player := campaignServer(t, &now, zet.Schedule{Events: []zet.Event{event}})
+	rival, _ := s.Register("7020392000000002", "Rival", 1, 1)
+	s.RecordResult(rival.ID, eventResult(800))
+	started := on(4, 8, 8).Add(-2 * time.Minute).Local().Format(time.DateTime)
+
+	reply := postTo(server, "/result", fmt.Sprintf("player_id=%d&game_mode=2&event_id=4&TOTAL_SCORE=900&begin_play_at=%s", player, url.QueryEscape(started)))
+	now = on(4, 9, 9)
+	got := login(server, player)
+
+	if !strings.Contains(reply, "\n100\n") || got[6] != "2" || got[9] != "1" {
+		t.Fatalf("result reply %q; eventprizes %q", reply, got[6:10])
+	}
+}
+
+func TestHandler_Login_StoreEventPlays_DoNotCountForANationalEventWithItsID(t *testing.T) {
+	now := on(4, 9, 9)
 	server, s, player := campaignServer(t, &now, zet.Schedule{Events: []zet.Event{rankedEvent()}})
 	inStore := eventResult(500)
 	inStore.GameMode = 3

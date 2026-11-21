@@ -38,12 +38,16 @@ versus:
 #   when: {start: 2027-04-22, end: "2027-05-12T23:59:59+09:00", every: 4w}
 # A national and a store event may share an id; two national or two store events may not.
 #
-# prizes are given when a run of the event closes: cards are ranked by their total score over the
-# run (ties share a rank), and each card with a prize gets it at its next login, in the event
-# results shown first in the pop-up with its rank and total. ranks is one rank or a band; each
-# item is a page of its own, and zet comes with the first. Items are as for grants (below). An
-# event with prizes needs a when. participation is given once a run, for a card's first play, in
-# that play's result: zet, an item other than a title, or both. The official events gave a title
+# prizes are given for each run of the event: cards are ranked by their total score over the
+# chapters they started during the run, even those that finish after it closes (ties share a
+# rank). The results are posted results_after the close (such as 30m), or when left out at the
+# first 08:00 after it, as the official results came the day after an event ended. Each card with
+# a prize gets it at its next login after that, in the event results shown first in the pop-up
+# with its rank and total. ranks is one rank or a band; each item is a page of its own, and zet
+# comes with the first. Items are as for grants (below). An event with prizes needs a when.
+# participation is given once a run, for a card's first play, in that play's result: zet, an item
+# other than a title, or both. Start times come from the cabinets' clocks, read in the server's
+# time zone, so cabinets and server need the same time zone. The official events gave a title
 # to each of ranks 1 to 10 and one to each band down to 201-400, with item sets by band, and a
 # weapon or skill item pack for taking part:
 #   prizes:

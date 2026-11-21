@@ -175,8 +175,11 @@ type Event struct {
 	DailyOpen  string `yaml:"daily_open"`
 	DailyClose string `yaml:"daily_close"`
 	// Prizes are given for the ranks of each run by total score, at each ranked card's first
-	// login after the run closes. They need a when.
+	// login after the run's results are posted. They need a when.
 	Prizes []EventPrize `yaml:"prizes"`
+	// ResultsAfter is how long after a run closes its results are posted, such as "30m"; 0 or
+	// left out, at the first 08:00 after the close.
+	ResultsAfter time.Duration `yaml:"results_after"`
 	// Participation is given for a card's first play in each run, in its result.
 	Participation *LadderGift `yaml:"participation"`
 }
@@ -531,7 +534,10 @@ func (event Event) convert() (zet.Event, error) {
 		SpecialMode: special, Cost: event.Cost, TakeWeapon: event.TakeWeapon, TakeDisposable: event.TakeDisposable,
 		MultiMatch: event.MultiMatch, GameMode: event.GameMode, Name: event.Name, Detail: event.Detail,
 		MinLevel: event.MinLevel, MaxLevel: event.MaxLevel, MinClassID: event.MinClass, MaxClassID: event.MaxClass,
-		When: when, DailyOpen: dailyOpen, DailyClose: dailyClose,
+		When: when, DailyOpen: dailyOpen, DailyClose: dailyClose, ResultsAfter: event.ResultsAfter,
+	}
+	if event.ResultsAfter < 0 {
+		return zet.Event{}, fmt.Errorf("event %d: results_after %s is negative", event.ID, event.ResultsAfter)
 	}
 	if converted.Prizes, err = event.prizes(when); err != nil {
 		return zet.Event{}, fmt.Errorf("event %d: %w", event.ID, err)

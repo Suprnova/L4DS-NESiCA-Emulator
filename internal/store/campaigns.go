@@ -87,11 +87,11 @@ func (s *Store) CountResults(playerID int64, from, to time.Time, filter ResultFi
 	return n, err
 }
 
-// ResultTimes returns the times, oldest first and each once, at which a player's results that
-// pass filter arrived before until.
-func (s *Store) ResultTimes(playerID int64, until time.Time, filter ResultFilter) ([]time.Time, error) {
+// StartTimes returns the times, oldest first and each once, at which the chapters of a player's
+// results that pass filter and arrived before until started.
+func (s *Store) StartTimes(playerID int64, until time.Time, filter ResultFilter) ([]time.Time, error) {
 	clause, args := filter.where()
-	rows, err := s.db.Query(`SELECT DISTINCT played_at FROM results WHERE player_id = ? AND played_at < ?`+clause+` ORDER BY played_at`,
+	rows, err := s.db.Query(`SELECT DISTINCT started_at FROM results WHERE player_id = ? AND played_at < ?`+clause+` ORDER BY started_at`,
 		append([]any{playerID, until.Unix()}, args...)...)
 	if err != nil {
 		return nil, err
@@ -100,11 +100,11 @@ func (s *Store) ResultTimes(playerID int64, until time.Time, filter ResultFilter
 
 	var times []time.Time
 	for rows.Next() {
-		var played int64
-		if err := rows.Scan(&played); err != nil {
+		var started int64
+		if err := rows.Scan(&started); err != nil {
 			return nil, err
 		}
-		times = append(times, time.Unix(played, 0))
+		times = append(times, time.Unix(started, 0))
 	}
 	return times, rows.Err()
 }
@@ -115,11 +115,12 @@ type Total struct {
 	Score    int64
 }
 
-// TotalScores returns each player's total score over their results that arrived from from until
-// to and pass filter, highest first; players with the same total are in player id order.
+// TotalScores returns each player's total score over their results whose chapters started from
+// from until to and that pass filter, highest first; players with the same total are in player id
+// order.
 func (s *Store) TotalScores(from, to time.Time, filter ResultFilter) ([]Total, error) {
 	clause, args := filter.where()
-	rows, err := s.db.Query(`SELECT player_id, SUM(score) AS total FROM results WHERE played_at >= ? AND played_at < ?`+clause+`
+	rows, err := s.db.Query(`SELECT player_id, SUM(score) AS total FROM results WHERE started_at >= ? AND started_at < ?`+clause+`
 		GROUP BY player_id ORDER BY total DESC, player_id`, append([]any{from.Unix(), to.Unix()}, args...)...)
 	if err != nil {
 		return nil, err

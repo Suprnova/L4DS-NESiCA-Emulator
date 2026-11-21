@@ -52,30 +52,30 @@ func TestCountResults_CountsWhatTheFilterPicks(t *testing.T) {
 	}
 }
 
-func TestResultTimes_ListsEachTimeOnceBeforeTheEnd(t *testing.T) {
+func TestStartTimes_ListsEachStartOnceOfResultsBeforeTheEnd(t *testing.T) {
 	s := openStore(t)
 	player := register(t, s)
 	at := func(hours int) time.Time { return day1.Add(time.Duration(hours) * time.Hour) }
-	s.RecordResult(player.ID, store.Result{Played: at(2), GameMode: 2, EventID: 4})
+	s.RecordResult(player.ID, store.Result{Played: at(3), Started: at(2), GameMode: 2, EventID: 4})
 	s.RecordResult(player.ID, store.Result{Played: at(1), GameMode: 2, EventID: 4})
 	s.RecordResult(player.ID, store.Result{Played: at(1), GameMode: 2, EventID: 4})
 	s.RecordResult(player.ID, store.Result{Played: at(3), GameMode: 2, EventID: 5})
-	s.RecordResult(player.ID, store.Result{Played: at(30), GameMode: 2, EventID: 4})
+	s.RecordResult(player.ID, store.Result{Played: at(30), Started: at(5), GameMode: 2, EventID: 4})
 
-	times, err := s.ResultTimes(player.ID, day2, store.ResultFilter{EventID: 4})
+	times, err := s.StartTimes(player.ID, day2, store.ResultFilter{EventID: 4})
 
 	if err != nil || len(times) != 2 || !times[0].Equal(at(1)) || !times[1].Equal(at(2)) {
-		t.Fatalf("ResultTimes() = %v, %v", times, err)
+		t.Fatalf("StartTimes() = %v, %v", times, err)
 	}
 }
 
-func TestTotalScores_RanksPlayersByTheirTotal(t *testing.T) {
+func TestTotalScores_RanksPlayersByTheirTotalOfChaptersStartedInTheRange(t *testing.T) {
 	s := openStore(t)
 	first := register(t, s)
 	second, _ := s.Register("7020392000000002", "Second", 0, 1)
 	third, _ := s.Register("7020392000000003", "Third", 0, 1)
 	event := store.ResultFilter{Modes: []int64{2}, EventID: 4}
-	s.RecordResult(first.ID, store.Result{Played: day1, GameMode: 2, EventID: 4, Score: 300})
+	s.RecordResult(first.ID, store.Result{Played: day2.Add(time.Minute), Started: day2.Add(-time.Minute), GameMode: 2, EventID: 4, Score: 300})
 	s.RecordResult(second.ID, store.Result{Played: day1, GameMode: 2, EventID: 4, Score: 200})
 	s.RecordResult(second.ID, store.Result{Played: day1, GameMode: 2, EventID: 4, Score: 200})
 	s.RecordResult(third.ID, store.Result{Played: day1, GameMode: 1, Score: 900})

@@ -1,6 +1,7 @@
 package zet
 
 import (
+	"cmp"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -12,7 +13,7 @@ import (
 )
 
 // EventPrize is the prize for ranks From to To of an event's run. Cards are ranked by their total
-// score over their results in the run, and cards with the same total share a rank. Each gift is
+// score over the chapters they started in the run, and cards with the same total share a rank. Each gift is
 // one entry of the login pop-up's event results, shown with the rank and the total.
 type EventPrize struct {
 	From, To int
@@ -74,8 +75,17 @@ type eventPrize struct {
 	gift  store.Gift
 }
 
-// deliverEventPrizes gives a player the prizes of the event runs they played in that closed by
-// now and that they have not had, and returns them.
+// posted returns when a run's results are posted: ResultsAfter after the run closes, or the first
+// day turn after it.
+func (e Event) posted(run calendar.Run) time.Time {
+	if e.ResultsAfter > 0 {
+		return run.End.Add(e.ResultsAfter)
+	}
+	return calendar.NextDayTurn(run.End)
+}
+
+// deliverEventPrizes gives a player the prizes of the event runs they played in whose results
+// were posted by now and that they have not had, and returns them.
 func (s *Server) deliverEventPrizes(player store.Player, now time.Time) []eventPrize {
 	var given []eventPrize
 	for _, event := range s.schedule.Events {
@@ -89,17 +99,18 @@ func (s *Server) deliverEventPrizes(player store.Player, now time.Time) []eventP
 	return given
 }
 
-// playedRuns returns the runs of an event that a player played in and that closed by now.
+// playedRuns returns the runs of an event that a player started a chapter in and whose results
+// were posted by now.
 func (s *Server) playedRuns(playerID int64, event Event, now time.Time) []calendar.Run {
-	times, err := s.store.ResultTimes(playerID, now, event.results())
+	times, err := s.store.StartTimes(playerID, now, event.results())
 	if err != nil {
 		slog.Error("list event results", "player", playerID, "event", event.ID, "error", err)
 		return nil
 	}
 	var runs []calendar.Run
-	for _, played := range times {
-		run, open := event.When.At(played)
-		if open && !run.End.After(now) && (len(runs) == 0 || runs[len(runs)-1].N != run.N) {
+	for _, started := range times {
+		run, open := event.When.At(started)
+		if open && !event.posted(run).After(now) && (len(runs) == 0 || runs[len(runs)-1].N != run.N) {
 			runs = append(runs, run)
 		}
 	}
@@ -141,14 +152,14 @@ func (s *Server) deliverRunPrize(player store.Player, event Event, run calendar.
 }
 
 // deliverParticipation gives a player the participation prize of the event a result was played
-// in, when it is their first result in the event's run, and returns it.
+// in, when it is their first result in the run its chapter started in, and returns it.
 func (s *Server) deliverParticipation(player store.Player, result store.Result) []store.Gift {
 	i := slices.IndexFunc(s.schedule.Events, func(e Event) bool { return e.mode() == result.GameMode && int64(e.ID) == result.EventID })
 	if i < 0 || s.schedule.Events[i].Participation == nil {
 		return nil
 	}
 	event := s.schedule.Events[i]
-	run, open := event.When.At(result.Played)
+	run, open := event.When.At(cmp.Or(result.Started, result.Played))
 	if !open {
 		return nil
 	}

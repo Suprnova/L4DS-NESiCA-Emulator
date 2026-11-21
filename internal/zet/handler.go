@@ -186,6 +186,7 @@ func (s *Server) result(w http.ResponseWriter, r *http.Request) {
 
 	result := store.Result{
 		Played:      s.now(),
+		Started:     beginPlayAt(r),
 		GameMode:    formInt(r, "game_mode"),
 		EventID:     formInt(r, "event_id"),
 		StageID:     formInt(r, "stage_id"),
@@ -231,6 +232,18 @@ func (s *Server) leaveRoom(w http.ResponseWriter, r *http.Request) {
 		s.leave(formInt(r, "player_id"), uint32(formInt(r, "room_id")))
 	}
 	w.Write([]byte(successHeader))
+}
+
+// beginPlayAt returns when a result's chapter started (begin_play_at, the cabinet's clock as
+// "2006-01-02 15:04:05", read in the server's time zone), or the zero time when it is missing or
+// malformed.
+func beginPlayAt(r *http.Request) time.Time {
+	text := r.PostFormValue("begin_play_at")
+	started, err := time.ParseInLocation(time.DateTime, text, time.Local)
+	if err != nil && text != "" {
+		slog.Warn("malformed begin_play_at; the result counts as started when it arrived", "value", text)
+	}
+	return started
 }
 
 // guest reports whether a player id is the one the game uses when no card is in use (-1).

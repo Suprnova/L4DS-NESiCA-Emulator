@@ -128,6 +128,7 @@ func TestCalendar_EventPrizes_ReadTheRanksAndGifts(t *testing.T) {
           - {category: weapon, id: 13, name: M60, count: 30}
       - {ranks: 11-20, zet: 100}
     participation: {item: {category: skill_item, id: 29, name: チャージャー流し, count: 2}}
+    results_after: 2h
 `)
 
 	if err != nil || len(got.Schedule.Events) != 1 {
@@ -140,8 +141,8 @@ func TestCalendar_EventPrizes_ReadTheRanksAndGifts(t *testing.T) {
 		band.From != 11 || band.To != 20 || len(band.Gifts) != 1 || band.Gifts[0].Zet != 100 || band.Gifts[0].Name != "Hunt" {
 		t.Fatalf("Prizes = %+v", event.Prizes)
 	}
-	if p := event.Participation; p == nil || p.Name != "Hunt" || p.Item.ItemID != 29 || p.Item.Count != 2 {
-		t.Fatalf("Participation = %+v", p)
+	if p := event.Participation; p == nil || p.Name != "Hunt" || p.Item.ItemID != 29 || p.Item.Count != 2 || event.ResultsAfter != 2*time.Hour {
+		t.Fatalf("Participation = %+v, results after %s", p, event.ResultsAfter)
 	}
 }
 
@@ -223,6 +224,7 @@ func TestCalendar_BadEntries_AreErrors(t *testing.T) {
 		"event, backwards ranks":     "events:\n  - {id: 2, name: A, type: national, difficulty: normal, " + eventWhen + ", prizes: [{ranks: 20-11, zet: 100}]}\n",
 		"event, rank 0":              "events:\n  - {id: 2, name: A, type: national, difficulty: normal, " + eventWhen + ", prizes: [{ranks: 0, zet: 100}]}\n",
 		"event, empty prize":         "events:\n  - {id: 2, name: A, type: national, difficulty: normal, " + eventWhen + ", prizes: [{ranks: 1}]}\n",
+		"event, negative delay":      "events:\n  - {id: 2, name: A, type: national, difficulty: normal, results_after: -1h}\n",
 		"event, title participation": "events:\n  - {id: 2, name: A, type: national, difficulty: normal, participation: {item: {category: title, id: 1, name: T}}}\n",
 	}
 

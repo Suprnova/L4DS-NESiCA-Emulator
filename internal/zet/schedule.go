@@ -90,9 +90,13 @@ type Event struct {
 	// DailyOpen and DailyClose are the event's hours, as times whose time of day (UTC) counts;
 	// equal ones mean all day.
 	DailyOpen, DailyClose time.Time
-	// Prizes are given for the ranks of each run, at a ranked card's first login after the run
-	// closes. An always-open event never closes, so it gives none.
+	// Prizes are given for the ranks of each run, at a ranked card's first login after the run's
+	// results are posted. An always-open event never closes, so it gives none.
 	Prizes []EventPrize
+	// ResultsAfter is how long after a run closes its results are posted, so that chapters
+	// started before the close have finished; 0 posts them at the first day turn after the close,
+	// as the official results were posted the day after an event ended.
+	ResultsAfter time.Duration
 	// Participation is given for a card's first play in each run, in that play's result reply;
 	// nil gives nothing.
 	Participation *Gift
