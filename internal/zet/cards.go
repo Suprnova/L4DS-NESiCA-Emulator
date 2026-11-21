@@ -6,23 +6,18 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
-	"slices"
 	"strconv"
 	"strings"
 
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/game"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/store"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/wire"
 )
 
-// emptyAvatarLines is the number of lines in an avatar block with nothing equipped: the id of
-// each of the six slots (head, tops, bottoms and the three accessories). The game reads a
-// slot's resource id, color index and replacement only when its id is not 0.
-const emptyAvatarLines = 6
-
-// Select answers a card lookup with the profile of the player registered to the card, with the
-// skill items and weapons set in their slots. An unregistered card gets the card server's
-// unregistered status and no profile. The avatar and title blocks are empty, so the game uses
-// its defaults, and changed_equipment is 0, so the game reads no latest equipment set.
+// Select answers a card lookup with the profile of the player registered to the card, with what
+// they wear and carry: the avatar items, skill items, title, and weapons set in their slots. An
+// unregistered card gets the card server's unregistered status and no profile. changed_equipment
+// is 0, so the game reads no latest equipment set.
 func (s *Server) Select(cardID string) (wire.CardReply, error) {
 	player, err := s.store.PlayerByCard(cardID)
 	if errors.Is(err, store.ErrNotRegistered) {
@@ -42,13 +37,76 @@ func (s *Server) Select(cardID string) (wire.CardReply, error) {
 		player.CoopClassPoint, player.VSClassPoint, player.CoopClassID, player.VSClassID,
 		0, "", player.HomeStore, s.storeName(player.HomeStore), player.CharaID,
 	}
-	lines = append(lines, slices.Repeat([]any{0}, emptyAvatarLines)...)
+	lines = append(lines, avatarLines(equipment, player.CharaID)...)
 	lines = append(lines, armedLines(equipment, store.SkillItem)...)
-	lines = append(lines, "", "")
+	lines = append(lines, titleLines(equipment)...)
 	lines = append(lines, armedLines(equipment, store.Weapon)...)
 	lines = append(lines, player.Exp, 0)
 	lines = append(lines, player.Logins, player.VSPlays, player.VSWins)
 	return wire.CardReply{Status: 1, Body: lineBody(lines)}, nil
+}
+
+// emptyAvatarLines is the number of lines in an avatar block with nothing worn: a 0 id for each of
+// the six slots.
+const emptyAvatarLines = 6
+
+// avatarSlots are the card reply's six avatar slots in order (head, tops, bottoms, face
+// accessory, upper-body accessory, lower-body accessory): the kind and slot each takes its item
+// from, and whether it has a replacement line. client.dll reads them at 0x10273cf0.
+var avatarSlots = []struct {
+	kind     store.ItemKind
+	slot     int64
+	replaced bool
+}{
+	{store.Head, 0, true}, {store.Upper, 2, false}, {store.Lower, 3, false},
+	{store.Accessory, 1, true}, {store.Accessory, 2, true}, {store.Accessory, 3, true},
+}
+
+// avatarLines lists the card reply's avatar block for a player whose card's chara_id is chara.
+// An empty slot is a 0 id. A worn one is its id, resource id, and color index, then for the
+// head and the accessories a replacement id. Only a head item has a replacement: the hair its
+// survivor wears under it (client.dll 0x102707d0 sets the hat as the head accessory and the
+// replacement as the hair), sent as replacement id, resource id, and color index 0.
+func avatarLines(equipment []store.Equipped, chara int64) []any {
+	worn := map[[2]int64]store.Equipped{}
+	for _, item := range equipment {
+		worn[[2]int64{int64(item.Kind), item.Slot}] = item
+	}
+	survivor, _ := game.SurvivorOf(chara)
+
+	var lines []any
+	for _, slot := range avatarSlots {
+		item, found := worn[[2]int64{int64(slot.kind), slot.slot}]
+		if !found {
+			lines = append(lines, 0)
+			continue
+		}
+		resource, color := avatarParts(item.ItemID)
+		lines = append(lines, item.ItemID, resource, color)
+		if !slot.replaced {
+			continue
+		}
+		hair := 0
+		if head, ok := game.AvatarAt(game.SiteHead, survivor, resource); ok && slot.kind == store.Head {
+			hair = head.Hair[survivor]
+		}
+		lines = append(lines, hair)
+		if hair != 0 {
+			lines = append(lines, hair, 0)
+		}
+	}
+	return lines
+}
+
+// titleLines lists the card reply's title lines: the id and name of the title worn, or two empty
+// lines for none.
+func titleLines(equipment []store.Equipped) []any {
+	for _, item := range equipment {
+		if item.Kind == store.Title {
+			return []any{item.ItemID, item.Name}
+		}
+	}
+	return []any{"", ""}
 }
 
 // armedLines lists the card reply's block of the slots of kind: the number of slots, then each

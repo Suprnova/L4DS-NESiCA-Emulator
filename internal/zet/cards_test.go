@@ -2,6 +2,7 @@ package zet_test
 
 import (
 	"encoding/base64"
+	"fmt"
 	"net/url"
 	"slices"
 	"strconv"
@@ -108,6 +109,44 @@ func TestServer_Select_ListsTheSkillItemsAndWeaponsInTheirSlots(t *testing.T) {
 	want := []string{"1", "2", "30", "Counter", "3", "", "", "1", "1", "6", "Rifle", "5", "6", "0", "0", "0", "0"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("equipment lines = %q, want %q", got, want)
+	}
+}
+
+func TestServer_Select_ListsTheAvatarItemsWithTheHairUnderTheHat(t *testing.T) {
+	server, s := newServer(t)
+	player, _ := s.Register("7020392000000001", "Survivor", 2, 1)
+	hat, _ := game.Avatar("santahat_head_acc")
+	beard, _ := game.Avatar("santamoustache_face_eqp")
+	hatID, beardID := int64(hat.Resources[game.Sara]*100+1), int64(beard.Resources[game.Sara]*100)
+	give(t, s, player.ID, store.Owned{Kind: store.Head, ItemID: hatID, Count: 1}, store.Owned{Kind: store.Accessory, ItemID: beardID, Count: 1})
+	s.Equip(player.ID, store.Head, 0, hatID, 1)
+	s.Equip(player.ID, store.Accessory, 1, beardID, 1)
+
+	reply, _ := server.Select("7020392000000001")
+
+	hair := fmt.Sprint(hat.Hair[game.Sara])
+	got := strings.Split(reply.Body, "\n")[19:33]
+	want := []string{
+		fmt.Sprint(hatID), fmt.Sprint(hat.Resources[game.Sara]), "1", hair, hair, "0",
+		"0", "0",
+		fmt.Sprint(beardID), fmt.Sprint(beard.Resources[game.Sara]), "0", "0",
+		"0", "0",
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("avatar lines = %q, want %q", got, want)
+	}
+}
+
+func TestServer_Select_ListsTheTitleWorn(t *testing.T) {
+	server, s := newServer(t)
+	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
+	give(t, s, player.ID, store.Owned{Kind: store.Title, ItemID: 12, Name: "Rookie", Count: 1})
+	s.Equip(player.ID, store.Title, 0, 12, 1)
+
+	reply, _ := server.Select("7020392000000001")
+
+	if got := strings.Split(reply.Body, "\n")[26:28]; !slices.Equal(got, []string{"12", "Rookie"}) {
+		t.Fatalf("title lines = %q", got)
 	}
 }
 
