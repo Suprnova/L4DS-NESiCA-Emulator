@@ -40,7 +40,7 @@ func TestServer_Select_ReturnsTheStoredPlayer(t *testing.T) {
 	}
 }
 
-func TestServer_Select_ReportsExperienceAndLoginsAfterTheEmptyBlocks(t *testing.T) {
+func TestServer_Select_ReportsExperienceAndLoginsAfterTheSlots(t *testing.T) {
 	server, s := newServer(t)
 	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
 	s.RecordResult(player.ID, store.Result{Exp: 222})
@@ -49,8 +49,8 @@ func TestServer_Select_ReportsExperienceAndLoginsAfterTheEmptyBlocks(t *testing.
 	reply, _ := server.Select("7020392000000001")
 
 	lines := strings.Split(reply.Body, "\n")
-	if lines[29] != "222" || lines[31] != "1" || len(lines) != 35 {
-		t.Fatalf("experience line = %q, login_num line = %q, %d lines", lines[29], lines[31], len(lines))
+	if lines[69] != "222" || lines[71] != "1" || len(lines) != 75 {
+		t.Fatalf("experience line = %q, login_num line = %q, %d lines", lines[69], lines[71], len(lines))
 	}
 }
 
@@ -62,8 +62,8 @@ func TestServer_Select_ReportsTheVersusRecordAfterTheLogins(t *testing.T) {
 	reply, _ := server.Select("7020392000000001")
 
 	lines := strings.Split(reply.Body, "\n")
-	if lines[32] != "3" || lines[33] != "2" {
-		t.Fatalf("vs_plays line = %q, vs_wins line = %q", lines[32], lines[33])
+	if lines[72] != "3" || lines[73] != "2" {
+		t.Fatalf("vs_plays line = %q, vs_wins line = %q", lines[72], lines[73])
 	}
 }
 
@@ -97,19 +97,21 @@ func TestServer_Select_ReportsTheHomeStore(t *testing.T) {
 	}
 }
 
-func TestServer_Select_ListsTheSkillItemsAndWeaponsInTheirSlots(t *testing.T) {
+func TestServer_Select_ListsEverySlotWithTheItemsInTheirSlots(t *testing.T) {
 	server, s := newServer(t)
 	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
-	give(t, s, player.ID, store.Owned{Kind: store.SkillItem, ItemID: 30, Name: "Counter", Count: 3}, store.Owned{Kind: store.Weapon, ItemID: 6, Name: "Rifle", Count: 5})
+	give(t, s, player.ID, store.Owned{Kind: store.SkillItem, ItemID: 30, Name: "Counter", Count: 3}, store.Owned{Kind: store.Weapon, ItemID: 13, Name: "MG", Count: 5})
 	s.Equip(player.ID, store.SkillItem, 2, 30, 3)
-	s.Equip(player.ID, store.Weapon, 1, 6, 5)
+	s.Equip(player.ID, store.Weapon, 2, 13, 5)
 
 	reply, _ := server.Select("7020392000000001")
 
-	got := strings.Split(reply.Body, "\n")[25:42]
-	want := []string{"1", "2", "30", "Counter", "3", "", "", "1", "1", "6", "Rifle", "5", "6", "0", "0", "0", "0"}
-	if !slices.Equal(got, want) {
-		t.Fatalf("equipment lines = %q, want %q", got, want)
+	lines := strings.Split(reply.Body, "\n")
+	skills := []string{"4", "1", "0", "", "0", "2", "30", "Counter", "3", "3", "0", "", "0", "4", "0", "", "0"}
+	weapons := []string{"4", "1", "0", "", "0", "0", "0", "2", "13", "MG", "5", "13", "0",
+		"3", "0", "", "0", "0", "0", "4", "0", "", "0", "0", "0"}
+	if !slices.Equal(lines[25:42], skills) || !slices.Equal(lines[44:69], weapons) {
+		t.Fatalf("skill lines = %q\nweapon lines = %q", lines[25:42], lines[44:69])
 	}
 }
 
@@ -146,7 +148,7 @@ func TestServer_Select_ListsTheTitleWorn(t *testing.T) {
 
 	reply, _ := server.Select("7020392000000001")
 
-	if got := strings.Split(reply.Body, "\n")[26:28]; !slices.Equal(got, []string{"12", "Rookie"}) {
+	if got := strings.Split(reply.Body, "\n")[42:44]; !slices.Equal(got, []string{"12", "Rookie"}) {
 		t.Fatalf("title lines = %q", got)
 	}
 }

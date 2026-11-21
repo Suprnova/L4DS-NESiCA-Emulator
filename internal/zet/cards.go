@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -110,22 +111,25 @@ func titleLines(equipment []store.Equipped) []any {
 }
 
 // armedLines lists the card reply's block of the slots of kind: the number of slots, then each
-// slot's number, item id, name and count. A weapon adds its resource id, which is its item id,
-// and its color index, which is always 0.
+// slot's number, item id, name and count, an empty slot's as 0, "", and 0. A weapon adds its
+// resource id, which is its item id, and its color index, which is always 0. Every slot is listed,
+// as the login opens every slot: the card screen, shown before login, opens as many weapon slots
+// as the block lists (client.dll 0x10274c40 keeps the count at +0x928, which 0x1026ef90 compares
+// each slot with), and the skill slots it lists (0x10270250).
 func armedLines(equipment []store.Equipped, kind store.ItemKind) []any {
-	var lines []any
-	n := 0
-	for _, item := range equipment {
-		if item.Kind != kind {
-			continue
+	lines := []any{store.Slots}
+	for slot := range int64(store.Slots) {
+		i := slices.IndexFunc(equipment, func(item store.Equipped) bool { return item.Kind == kind && item.Slot == slot+1 })
+		var item store.Equipped
+		if i >= 0 {
+			item = equipment[i]
 		}
-		n++
-		lines = append(lines, item.Slot, item.ItemID, item.Name, item.Count)
+		lines = append(lines, slot+1, item.ItemID, item.Name, item.Count)
 		if kind == store.Weapon {
 			lines = append(lines, item.ItemID, 0)
 		}
 	}
-	return append([]any{n}, lines...)
+	return lines
 }
 
 // lineBody returns lines as a reply body, one value per line.
