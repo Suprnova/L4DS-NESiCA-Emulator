@@ -11,10 +11,6 @@ import (
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/store"
 )
 
-// emptyGroups is the number of groups the login reply sends empty, each as a count of 0: titles,
-// dailys, thrus, and eventprizes. comps follows them.
-const emptyGroups = 4
-
 // defaultBindings is the number of config_values after the settings: the controller, mouse
 // button and radio bindings, which the cabinet never changes. 0 keeps the game's defaults.
 const defaultBindings = 18
@@ -77,25 +73,12 @@ type delivered struct {
 }
 
 // giftGroupLines lists the comps or period_bonus group: the number of gifts, then for each its
-// id, name, and ZG, and its item block (id, category, name, count, resource id, color index,
-// replace, and rare). A weapon's resource id is its id, an avatar item's resource id and color
-// are the ones its id carries, and everything else has 0 for both. Replace and rare are 0: a
-// nonzero rare on an avatar item makes the pop-up take the next entry as its partner (GameUI
-// 0x10058850).
+// id, name, ZG, and item block.
 func giftGroupLines(gifts []delivered) []string {
 	lines := []string{strconv.Itoa(len(gifts))}
 	for _, d := range gifts {
-		item := d.gift.Item
-		resource, color := 0, 0
-		switch {
-		case item.Kind == store.Weapon:
-			resource = int(item.ItemID)
-		case item.Kind.Wearable():
-			resource, color = avatarParts(item.ItemID)
-		}
-		lines = append(lines, strconv.FormatInt(d.id, 10), d.gift.Name, strconv.FormatInt(d.gift.Zet, 10),
-			strconv.FormatInt(item.ItemID, 10), strconv.FormatInt(int64(item.Kind), 10), item.Name,
-			strconv.FormatInt(item.Count, 10), strconv.Itoa(resource), strconv.Itoa(color), "0", "0")
+		lines = append(lines, strconv.FormatInt(d.id, 10), d.gift.Name, strconv.FormatInt(d.gift.Zet, 10))
+		lines = append(lines, itemLines(d.gift.Item)...)
 	}
 	return lines
 }
@@ -143,17 +126,20 @@ func (s *Server) deliverGrants(playerID, chara int64) []delivered {
 	return given
 }
 
-// login counts the login, delivers the gifts queued for the player and the open grants they have
-// not had, and answers with a success header, the queued gifts (comps), the player's settings,
-// their stage progress, the grants (period_bonus), and every slot open. A guest gets the default
-// settings, no progress, and no gifts.
+// login counts the login, delivers the gifts due (queued gifts, open grants, and the campaigns'
+// login gifts), and answers with a success header, the daily gifts (dailys), the login ladder
+// gifts (thrus), the queued gifts (comps), the player's settings, their stage progress, the grants
+// and other named gifts (period_bonus), and every slot open. A guest gets the default settings,
+// no progress, and no gifts.
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	playerID := formInt(r, "player_id")
+	now := s.now()
 	settings := store.DefaultSettings
 	var clears []store.Clear
-	var queued, grants []delivered
+	var queued, named []delivered
+	var campaigns loginGifts
 	if !guest(playerID) {
-		if err := s.store.RecordLogin(playerID, calendar.DayOf(s.now())); err != nil {
+		if err := s.store.RecordLogin(playerID, calendar.DayOf(now)); err != nil {
 			slog.Error("record login", "player", playerID, "error", err)
 		}
 		player, err := s.store.Player(playerID)
@@ -164,13 +150,17 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 			slog.Error("load clears", "player", playerID, "error", err)
 		}
 		queued = s.deliverQueued(playerID)
-		grants = s.deliverGrants(playerID, player.CharaID)
+		named = s.deliverGrants(playerID, player.CharaID)
+		if player.ID != 0 {
+			campaigns = s.deliverCampaigns(player, now)
+			named = append(named, campaigns.named...)
+		}
 	}
 
-	lines := []string{"1", "1", "0"}
-	for range emptyGroups {
-		lines = append(lines, "0")
-	}
+	lines := []string{"1", "1", "0", "0"} // titles
+	lines = append(lines, dailyLines(campaigns.dailys)...)
+	lines = append(lines, thruLines(campaigns.thrus)...)
+	lines = append(lines, "0") // eventprizes
 	lines = append(lines, giftGroupLines(queued)...)
 	lines = append(lines, configLines(settings)...)
 	for range unusedLoginLines {
@@ -179,7 +169,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 
 	lines = append(lines, stageLines(clears)...)
 	lines = append(lines, membershipLines...)
-	lines = append(lines, giftGroupLines(grants)...)
+	lines = append(lines, giftGroupLines(named)...)
 	lines = append(lines, slotLines...)
 	w.Write([]byte(strings.Join(lines, "\n") + "\n"))
 }

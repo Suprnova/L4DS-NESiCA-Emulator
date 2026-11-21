@@ -174,11 +174,12 @@ func svp(w http.ResponseWriter, r *http.Request) {
 // chapter counts towards the player's stage progress only when campaign_flag is 1, which the game
 // sets for co-op and single play (modes 1 and 5), not for events or versus. The weapons and skill
 // items the chapter used up (weapon_fluctuation and disposable_fluctuation) come off the player's
-// slots. A guest's result is not kept.
+// slots. When the result reaches a step of a play ladder, the reply carries its gifts (mode_reward);
+// otherwise it is a success header. A guest's result is not kept.
 func (s *Server) result(w http.ResponseWriter, r *http.Request) {
-	defer w.Write([]byte(successHeader))
 	playerID := formInt(r, "player_id")
 	if guest(playerID) {
+		w.Write([]byte(successHeader))
 		return
 	}
 
@@ -205,6 +206,18 @@ func (s *Server) result(w http.ResponseWriter, r *http.Request) {
 		slog.Error("record result", "player", playerID, "error", err)
 	}
 	s.useItems(playerID, r)
+
+	player, err := s.store.Player(playerID)
+	if err != nil {
+		slog.Error("load player", "player", playerID, "error", err)
+		w.Write([]byte(successHeader))
+		return
+	}
+	if rewards := s.deliverPlayRewards(player, result.Played); len(rewards) > 0 {
+		w.Write([]byte(strings.Join(resultLines(rewards), "\n") + "\n"))
+		return
+	}
+	w.Write([]byte(successHeader))
 }
 
 // leaveRoom tells the matching master that a player left a room, and answers with a success

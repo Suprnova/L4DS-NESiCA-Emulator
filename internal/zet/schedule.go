@@ -21,6 +21,11 @@ type Schedule struct {
 	// CoopStages are the national co-op stage lists. The first open at the time of the stage list
 	// request is what national co-op offers; with none open, it offers every stage.
 	CoopStages []StageList
+	// The campaigns: gifts once a day, for days logged in, for coming back, and for plays.
+	DailyGifts   []DailyGift
+	LoginLadders []LoginLadder
+	Returning    []ReturningPack
+	PlayLadders  []PlayLadder
 }
 
 // StageList is a list of stages offered while its span is open, such as the official service's
