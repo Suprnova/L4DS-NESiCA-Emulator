@@ -330,7 +330,7 @@ func (s Server) Schedule() (zet.Schedule, error) {
 		schedule.Versus = append(schedule.Versus, zet.VersusUnit{
 			ID: unit.ID, StageID: unit.Stage, ChapterID: unit.Chapter, Difficulty: difficulty,
 			Cost: unit.Cost, TakeWeapon: unit.TakeWeapon, GameMode: unit.GameMode,
-			Start: unit.Start, End: unit.End,
+			When: calendar.Span{Start: unit.Start, End: unit.End},
 		})
 	}
 	for _, event := range s.Events {
@@ -359,7 +359,7 @@ func (s Server) Schedule() (zet.Schedule, error) {
 			SpecialMode: special, Cost: event.Cost, TakeWeapon: event.TakeWeapon, TakeDisposable: event.TakeDisposable,
 			MultiMatch: event.MultiMatch, GameMode: event.GameMode, Name: event.Name, Detail: event.Detail,
 			MinLevel: event.MinLevel, MaxLevel: event.MaxLevel, MinClassID: event.MinClass, MaxClassID: event.MaxClass,
-			Open: event.Open, Close: event.Close, DailyOpen: dailyOpen, DailyClose: dailyClose,
+			When: calendar.Span{Start: event.Open, End: event.Close}, DailyOpen: dailyOpen, DailyClose: dailyClose,
 		})
 	}
 	ids := map[int]bool{}
@@ -396,7 +396,7 @@ func (g Grant) convert() (zet.Grant, error) {
 	if err != nil {
 		return zet.Grant{}, err
 	}
-	return zet.Grant{ID: g.ID, Start: g.Start, End: g.End, Gift: gift}, nil
+	return zet.Grant{ID: g.ID, When: calendar.Span{Start: g.Start, End: g.End}, Gift: gift}, nil
 }
 
 // NewGift returns the gift of name, zg ZG, and item (none when nil), or what is wrong with it: no

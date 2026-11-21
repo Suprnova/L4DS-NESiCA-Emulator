@@ -11,7 +11,7 @@ func TestDeliver_GivesTheZetAndTheItem(t *testing.T) {
 	s := openStore(t)
 	player := register(t, s)
 
-	ok, err := s.Deliver(player.ID, 1, delivered, store.Gift{Name: "Welcome", Zet: 500, Item: rifle})
+	ok, err := s.Deliver(player.ID, 1, 0, delivered, store.Gift{Name: "Welcome", Zet: 500, Item: rifle})
 
 	got, _ := s.Owned(player.ID)
 	updated, _ := s.Player(player.ID)
@@ -23,9 +23,9 @@ func TestDeliver_GivesTheZetAndTheItem(t *testing.T) {
 func TestDeliver_SameGrantAgain_GivesNothing(t *testing.T) {
 	s := openStore(t)
 	player := register(t, s)
-	s.Deliver(player.ID, 1, delivered, store.Gift{Name: "Welcome", Zet: 500, Item: rifle})
+	s.Deliver(player.ID, 1, 0, delivered, store.Gift{Name: "Welcome", Zet: 500, Item: rifle})
 
-	ok, err := s.Deliver(player.ID, 1, delivered, store.Gift{Name: "Welcome", Zet: 500, Item: rifle})
+	ok, err := s.Deliver(player.ID, 1, 0, delivered, store.Gift{Name: "Welcome", Zet: 500, Item: rifle})
 
 	got, _ := s.Owned(player.ID)
 	updated, _ := s.Player(player.ID)
@@ -34,12 +34,24 @@ func TestDeliver_SameGrantAgain_GivesNothing(t *testing.T) {
 	}
 }
 
+func TestDeliver_NextRunOfTheGrant_GivesAgain(t *testing.T) {
+	s := openStore(t)
+	player := register(t, s)
+	s.Deliver(player.ID, 1, 0, delivered, store.Gift{Name: "Daily", Zet: 500})
+
+	ok, err := s.Deliver(player.ID, 1, 1, delivered, store.Gift{Name: "Daily", Zet: 500})
+
+	if updated, _ := s.Player(player.ID); !ok || err != nil || updated.Zet != 1000 {
+		t.Fatalf("Deliver() = %v, %v; zet %d", ok, err, updated.Zet)
+	}
+}
+
 func TestDeliver_AnotherGrantOfTheSameItem_AddsToTheStack(t *testing.T) {
 	s := openStore(t)
 	player := register(t, s)
-	s.Deliver(player.ID, 1, delivered, store.Gift{Name: "A", Item: rifle})
+	s.Deliver(player.ID, 1, 0, delivered, store.Gift{Name: "A", Item: rifle})
 
-	s.Deliver(player.ID, 2, delivered, store.Gift{Name: "B", Item: rifle})
+	s.Deliver(player.ID, 2, 0, delivered, store.Gift{Name: "B", Item: rifle})
 
 	want := rifle
 	want.Count = 10
@@ -52,7 +64,7 @@ func TestDeliver_SVP_IsNotOwned(t *testing.T) {
 	s := openStore(t)
 	player := register(t, s)
 
-	s.Deliver(player.ID, 1, delivered, store.Gift{Name: "Bonus", Item: store.Owned{Kind: store.SVP, Count: 900}})
+	s.Deliver(player.ID, 1, 0, delivered, store.Gift{Name: "Bonus", Item: store.Owned{Kind: store.SVP, Count: 900}})
 
 	if got, _ := s.Owned(player.ID); len(got) != 0 {
 		t.Fatalf("Owned() = %+v, want none", got)

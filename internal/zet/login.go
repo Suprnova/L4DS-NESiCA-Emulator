@@ -114,17 +114,18 @@ func (s *Server) deliverQueued(playerID int64) []delivered {
 	return given
 }
 
-// deliverGrants gives a player, whose card's chara_id is chara, the grants open now that they have
-// not had, and returns them. An avatar item their survivor cannot wear is left out of its grant.
+// deliverGrants gives a player, whose card's chara_id is chara, the grants open now whose current
+// run they have not had, and returns them. An avatar item their survivor cannot wear is left out of its grant.
 func (s *Server) deliverGrants(playerID, chara int64) []delivered {
 	now := s.now()
 	var given []delivered
 	for _, g := range s.schedule.Grants {
-		if !g.Open(now) {
+		run, open := g.When.At(now)
+		if !open {
 			continue
 		}
 		gift, fits := g.For(chara)
-		ok, err := s.store.Deliver(playerID, int64(g.ID), now, gift)
+		ok, err := s.store.Deliver(playerID, int64(g.ID), run.N, now, gift)
 		if err != nil {
 			slog.Error("deliver grant", "player", playerID, "grant", g.ID, "error", err)
 			continue

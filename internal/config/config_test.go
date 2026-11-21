@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/calendar"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/config"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/hotkey"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/store"
@@ -135,11 +136,11 @@ func TestSchedule_ConvertsAVersusUnit(t *testing.T) {
 	got, err := loaded.Server.Schedule()
 
 	want := zet.VersusUnit{ID: 1, StageID: 2, ChapterID: 3, Difficulty: 3, Cost: 100, TakeWeapon: true, GameMode: "versus",
-		Start: time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC), End: time.Date(2027, 11, 1, 0, 0, 0, 0, time.UTC)}
-	if err != nil || len(got.Versus) != 1 || !got.Versus[0].Start.Equal(want.Start) || !got.Versus[0].End.Equal(want.End) {
+		When: calendar.Span{Start: time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC), End: time.Date(2027, 11, 1, 0, 0, 0, 0, time.UTC)}}
+	if err != nil || len(got.Versus) != 1 || !got.Versus[0].When.Start.Equal(want.When.Start) || !got.Versus[0].When.End.Equal(want.When.End) {
 		t.Fatalf("Schedule() = %+v, %v", got, err)
 	}
-	got.Versus[0].Start, got.Versus[0].End = want.Start, want.End
+	got.Versus[0].When = want.When
 	if got.Versus[0] != want {
 		t.Fatalf("Schedule().Versus[0] = %+v, want %+v", got.Versus[0], want)
 	}
@@ -327,7 +328,7 @@ func TestSchedule_ConvertsAGrant(t *testing.T) {
 	grant := got.Grants[0]
 	want := store.Owned{Kind: store.Weapon, ItemID: 6, Name: "AK-47", Count: 5}
 	if grant.ID != 3 || grant.Name != "Welcome" || grant.Zet != 500 || grant.Item != want ||
-		!grant.Start.Equal(time.Date(2026, 11, 1, 8, 0, 0, 0, time.UTC)) || !grant.End.Equal(time.Date(2026, 12, 1, 8, 0, 0, 0, time.UTC)) {
+		!grant.When.Start.Equal(time.Date(2026, 11, 1, 8, 0, 0, 0, time.UTC)) || !grant.When.End.Equal(time.Date(2026, 12, 1, 8, 0, 0, 0, time.UTC)) {
 		t.Fatalf("Grants[0] = %+v", grant)
 	}
 }

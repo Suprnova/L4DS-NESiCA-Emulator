@@ -5,32 +5,34 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/calendar"
 )
 
 // Schedule is what the game can play besides the stage list, the national versus schedule and
-// the events, which the game fetches once at startup; and the grants handed out at login.
+// the events, which the game fetches once at startup; and the grants handed out at login. Each
+// entry is open during the runs of its span. The startup lists send every run open at the time of
+// the request or starting no later than the next day turn, each with its own times, and the game opens
+// and closes them itself; a run starting later is sent once the game restarts after it.
 type Schedule struct {
 	Versus []VersusUnit
 	Events []Event
 	Grants []Grant
 }
 
-// Grant is a gift every card gets once, at its first login while the grant is open, from Start
-// until End. The login's reward pop-up shows it under its name: a page for its ZG when it has
-// any, then one for its item.
+// Grant is a gift every card gets once in each run of the grant's span, at its first login during
+// the run. The login's reward pop-up shows it under its name: a page for its ZG when it has any,
+// then one for its item.
 type Grant struct {
-	// ID tells grants apart: a card that had the grant with an id does not get it again.
-	ID int
-	// Start and End bound when the grant is open: from Start, until End.
-	Start, End time.Time
+	// ID tells grants apart: a card that had a run of the grant with an id does not get that run
+	// again.
+	ID   int
+	When calendar.Span
 	Gift
 }
 
-// Open reports whether the grant is open at t.
-func (g Grant) Open(t time.Time) bool { return !t.Before(g.Start) && t.Before(g.End) }
-
-// VersusUnit is one map of the national versus schedule. The mode select offers versus while a
-// unit's window is open; a window whose start equals its end is never open.
+// VersusUnit is one map of the national versus schedule. The mode select offers versus during a
+// run of the unit's span.
 type VersusUnit struct {
 	ID, StageID, ChapterID int
 	// Difficulty is the game's difficulty plus 1, as in room entries.
@@ -39,8 +41,8 @@ type VersusUnit struct {
 	Cost       int
 	TakeWeapon bool
 	// GameMode is a mode from update\scripts\gamemodes.txt that the stage's mission lists.
-	GameMode   string
-	Start, End time.Time
+	GameMode string
+	When     calendar.Span
 }
 
 // Event types. The store types are offered only when the event's id equals the operator's
@@ -52,9 +54,8 @@ const (
 	EventStoreEX    = 5
 )
 
-// Event is a national or store event: a stage played with special rules. It is open while both
-// its period and its daily hours contain the current time; a period or daily hours whose start
-// equals its end always contain it, so zero times leave an event open.
+// Event is a national or store event: a stage played with special rules. It is open during a run
+// of its span (always, for the zero span) and its daily hours.
 type Event struct {
 	ID, Type, StageID, ChapterID int
 	// Difficulty is the game's difficulty plus 1, as in room entries.
@@ -69,34 +70,51 @@ type Event struct {
 	Name, Detail string
 	// The entry conditions shown on the announcement: a level range and a class range.
 	MinLevel, MaxLevel, MinClassID, MaxClassID int
-	// Open and Close bound the event's period; DailyOpen and DailyClose its hours, as times
-	// whose time of day (UTC) counts.
-	Open, Close, DailyOpen, DailyClose time.Time
+	When                                       calendar.Span
+	// DailyOpen and DailyClose are the event's hours, as times whose time of day (UTC) counts;
+	// equal ones mean all day.
+	DailyOpen, DailyClose time.Time
 }
 
-// versusList answers the national versus schedule: the unit count, then nine lines per unit.
+// startupRuns returns the runs of span that the startup lists send at now: those open now or
+// starting no later than the next day turn, so a cabinet started during the morning maintenance
+// gets the runs that start when the day turns.
+func startupRuns(span calendar.Span, now time.Time) []calendar.Run {
+	return span.Runs(now, calendar.NextDayTurn(now).Add(time.Nanosecond))
+}
+
+// versusList answers the national versus schedule: the unit count, then nine lines per run of a
+// unit.
 func (s *Server) versusList(w http.ResponseWriter, _ *http.Request) {
-	lines := []string{"1", "1", "0", strconv.Itoa(len(s.schedule.Versus))}
+	now := s.now()
+	var lines []string
 	for _, u := range s.schedule.Versus {
-		lines = append(lines, strconv.Itoa(u.ID), strconv.Itoa(u.StageID), strconv.Itoa(u.ChapterID),
-			strconv.Itoa(u.Difficulty), strconv.Itoa(u.Cost), flag(u.TakeWeapon), u.GameMode, unix(u.Start), unix(u.End))
+		for _, run := range startupRuns(u.When, now) {
+			lines = append(lines, strconv.Itoa(u.ID), strconv.Itoa(u.StageID), strconv.Itoa(u.ChapterID),
+				strconv.Itoa(u.Difficulty), strconv.Itoa(u.Cost), flag(u.TakeWeapon), u.GameMode, unix(run.Start), unix(run.End))
+		}
 	}
-	w.Write([]byte(strings.Join(lines, "\n") + "\n"))
+	header := []string{"1", "1", "0", strconv.Itoa(len(lines) / 9)}
+	w.Write([]byte(strings.Join(append(header, lines...), "\n") + "\n"))
 }
 
-// eventList answers the events: the event count, then 21 lines per event.
+// eventList answers the events: the event count, then 21 lines per run of an event. An event open
+// always is sent with zero times.
 func (s *Server) eventList(w http.ResponseWriter, _ *http.Request) {
-	lines := []string{"1", "1", "0", strconv.Itoa(len(s.schedule.Events))}
+	now := s.now()
+	var lines []string
 	for _, e := range s.schedule.Events {
-		lines = append(lines, strconv.Itoa(e.ID), strconv.Itoa(e.Type), strconv.Itoa(e.StageID), strconv.Itoa(e.ChapterID),
-			strconv.Itoa(e.Difficulty), strconv.Itoa(e.SpecialMode), strconv.Itoa(e.Cost),
-			flag(e.TakeWeapon), flag(e.TakeDisposable), flag(e.MultiMatch), e.GameMode, e.Name, e.Detail,
-			strconv.Itoa(e.MinLevel), strconv.Itoa(e.MaxLevel), strconv.Itoa(e.MinClassID), strconv.Itoa(e.MaxClassID),
-			unix(e.Open), unix(e.Close), unix(e.DailyOpen), unix(e.DailyClose))
+		for _, run := range startupRuns(e.When, now) {
+			lines = append(lines, strconv.Itoa(e.ID), strconv.Itoa(e.Type), strconv.Itoa(e.StageID), strconv.Itoa(e.ChapterID),
+				strconv.Itoa(e.Difficulty), strconv.Itoa(e.SpecialMode), strconv.Itoa(e.Cost),
+				flag(e.TakeWeapon), flag(e.TakeDisposable), flag(e.MultiMatch), e.GameMode, e.Name, e.Detail,
+				strconv.Itoa(e.MinLevel), strconv.Itoa(e.MaxLevel), strconv.Itoa(e.MinClassID), strconv.Itoa(e.MaxClassID),
+				unix(run.Start), unix(run.End), unix(e.DailyOpen), unix(e.DailyClose))
+		}
 	}
-	w.Write([]byte(strings.Join(lines, "\n") + "\n"))
+	header := []string{"1", "1", "0", strconv.Itoa(len(lines) / 21)}
+	w.Write([]byte(strings.Join(append(header, lines...), "\n") + "\n"))
 }
-
 func flag(b bool) string {
 	if b {
 		return "1"

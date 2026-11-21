@@ -16,7 +16,7 @@ func give(t *testing.T, s *store.Store, playerID int64, items ...store.Owned) {
 	t.Helper()
 	for _, item := range items {
 		lastGrant++
-		if _, err := s.Deliver(playerID, lastGrant, time.Now(), store.Gift{Name: "Gift", Item: item}); err != nil {
+		if _, err := s.Deliver(playerID, lastGrant, 0, time.Now(), store.Gift{Name: "Gift", Item: item}); err != nil {
 			t.Fatal(err)
 		}
 	}

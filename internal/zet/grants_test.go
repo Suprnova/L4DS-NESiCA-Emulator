@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/calendar"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/game"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/store"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/zet"
@@ -16,7 +17,7 @@ var (
 	grantOpens  = time.Date(2026, 11, 1, 8, 0, 0, 0, time.UTC)
 	grantCloses = time.Date(2026, 12, 1, 8, 0, 0, 0, time.UTC)
 	starterPack = zet.Grant{
-		ID: 7, Start: grantOpens, End: grantCloses,
+		ID: 7, When: calendar.Span{Start: grantOpens, End: grantCloses},
 		Gift: zet.Gift{Gift: store.Gift{Name: "Starter Pack", Zet: 500, Item: store.Owned{Kind: store.Weapon, ItemID: 6, Name: "Rifle", Count: 5}}},
 	}
 )
@@ -66,6 +67,22 @@ func TestHandler_Login_GrantAlreadyGiven_IsNotShownAgain(t *testing.T) {
 	}
 }
 
+func TestHandler_Login_RepeatingGrant_IsGivenAgainInItsNextRun(t *testing.T) {
+	daily := zet.Grant{ID: 8, When: calendar.Span{Start: grantOpens, End: grantOpens.Add(24 * time.Hour), Every: calendar.Every{Days: 1}},
+		Gift: zet.Gift{Gift: store.Gift{Name: "Daily", Zet: 100}}}
+	server, s := newGrantServer(t, grantOpens.Add(time.Hour), daily)
+	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
+	postTo(server, "/login", fmt.Sprintf("player_id=%d", player.ID))
+	postTo(server, "/login", fmt.Sprintf("player_id=%d", player.ID))
+	server.SetClock(func() time.Time { return grantOpens.Add(25 * time.Hour) })
+
+	got := periodBonus(postTo(server, "/login", fmt.Sprintf("player_id=%d", player.ID)))
+
+	if updated, _ := s.Player(player.ID); got[0] != "1" || updated.Zet != 200 {
+		t.Fatalf("lines = %q; zet %d", got, updated.Zet)
+	}
+}
+
 func TestHandler_Login_ClosedGrant_IsNotGiven(t *testing.T) {
 	for _, now := range []time.Time{grantOpens.Add(-time.Second), grantCloses} {
 		server, s := newGrantServer(t, now, starterPack)
@@ -80,7 +97,7 @@ func TestHandler_Login_ClosedGrant_IsNotGiven(t *testing.T) {
 }
 
 func TestHandler_Login_SVPGrant_IsShownButNotOwned(t *testing.T) {
-	bonus := zet.Grant{ID: 1, Start: grantOpens, End: grantCloses, Gift: zet.Gift{Gift: store.Gift{Name: "Bonus SVP", Item: store.Owned{Kind: store.SVP, Count: 900}}}}
+	bonus := zet.Grant{ID: 1, When: calendar.Span{Start: grantOpens, End: grantCloses}, Gift: zet.Gift{Gift: store.Gift{Name: "Bonus SVP", Item: store.Owned{Kind: store.SVP, Count: 900}}}}
 	server, s := newGrantServer(t, grantOpens, bonus)
 	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
 
@@ -113,7 +130,7 @@ func avatarGrant(t *testing.T, name string, color int) zet.Grant {
 	if !ok {
 		t.Fatalf("no avatar item %s", name)
 	}
-	return zet.Grant{ID: 9, Start: grantOpens, End: grantCloses, Gift: zet.Gift{
+	return zet.Grant{ID: 9, When: calendar.Span{Start: grantOpens, End: grantCloses}, Gift: zet.Gift{
 		Gift:   store.Gift{Name: "Outfit", Item: store.Owned{Kind: zet.KindOf(item.Site), Name: "Coat"}},
 		Avatar: &item, Color: color,
 	}}

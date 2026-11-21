@@ -132,6 +132,18 @@ var migrations = []string{
 		queued_at    INTEGER NOT NULL,
 		delivered_at INTEGER
 	)`,
+	// A grant that repeats is delivered once in each run, so deliveries record the run; every
+	// earlier one was of a grant's only run, 0.
+	`CREATE TABLE grant_deliveries_new (
+		player_id    INTEGER NOT NULL REFERENCES players (id),
+		grant_id     INTEGER NOT NULL,
+		run          INTEGER NOT NULL,
+		delivered_at INTEGER NOT NULL,
+		PRIMARY KEY (player_id, grant_id, run)
+	);
+	INSERT INTO grant_deliveries_new SELECT player_id, grant_id, 0, delivered_at FROM grant_deliveries;
+	DROP TABLE grant_deliveries;
+	ALTER TABLE grant_deliveries_new RENAME TO grant_deliveries`,
 }
 
 // settingsColumns lists the columns holding a player's [Settings], in field order.

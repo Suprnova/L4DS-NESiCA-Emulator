@@ -22,17 +22,17 @@ type QueuedGift struct {
 	Gift
 }
 
-// Deliver gives a player the gift of the scheduled grant grantID, recorded as delivered at the
-// given time. A grant is delivered once: when it was delivered to the player before, Deliver
-// gives nothing and reports false.
-func (s *Store) Deliver(playerID, grantID int64, at time.Time, gift Gift) (bool, error) {
+// Deliver gives a player the gift of run run of the scheduled grant grantID, recorded as delivered
+// at the given time. Each run of a grant is delivered once: when it was delivered to the player
+// before, Deliver gives nothing and reports false.
+func (s *Store) Deliver(playerID, grantID int64, run int, at time.Time, gift Gift) (bool, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return false, err
 	}
 	defer tx.Rollback()
 
-	outcome, err := tx.Exec(`INSERT INTO grant_deliveries (player_id, grant_id, delivered_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING`, playerID, grantID, at.Unix())
+	outcome, err := tx.Exec(`INSERT INTO grant_deliveries (player_id, grant_id, run, delivered_at) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING`, playerID, grantID, run, at.Unix())
 	if err != nil {
 		return false, err
 	}
