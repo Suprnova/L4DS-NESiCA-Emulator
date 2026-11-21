@@ -9,6 +9,7 @@ import (
 	"os"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"go.yaml.in/yaml/v4"
@@ -173,6 +174,20 @@ type Event struct {
 	// before the open runs past midnight.
 	DailyOpen  string `yaml:"daily_open"`
 	DailyClose string `yaml:"daily_close"`
+	// Prizes are given for the ranks of each run by total score, at each ranked card's first
+	// login after the run closes. They need a when.
+	Prizes []EventPrize `yaml:"prizes"`
+	// Participation is given for a card's first play in each run, in its result.
+	Participation *LadderGift `yaml:"participation"`
+}
+
+// EventPrize is the prize for a rank or a band of ranks: ZG, items, or both. Each item is an entry
+// of the login's event results, the first with the ZG.
+type EventPrize struct {
+	// Ranks is one rank, such as 1, or a band, such as 11-20.
+	Ranks string      `yaml:"ranks"`
+	Zet   int64       `yaml:"zet"`
+	Items []GrantItem `yaml:"items"`
 }
 
 // Grant is a gift every card gets once in each run of the grant, at its first login during the
@@ -337,10 +352,13 @@ func (c Calendar) Schedule() (zet.Schedule, error) {
 			Cost: unit.Cost, TakeWeapon: unit.TakeWeapon, GameMode: unit.GameMode, When: when,
 		})
 	}
-	for _, event := range c.Events {
+	for i, event := range c.Events {
 		converted, err := event.convert()
 		if err != nil {
 			return zet.Schedule{}, err
+		}
+		if slices.ContainsFunc(schedule.Events, converted.Clashes) {
+			return zet.Schedule{}, fmt.Errorf("event %d (entry %d) has the id of another %s event", event.ID, i+1, event.Type)
 		}
 		schedule.Events = append(schedule.Events, converted)
 	}
@@ -508,13 +526,76 @@ func (event Event) convert() (zet.Event, error) {
 	if event.God {
 		special = 1
 	}
-	return zet.Event{
+	converted := zet.Event{
 		ID: event.ID, Type: kind, StageID: event.Stage, ChapterID: event.Chapter, Difficulty: difficulty,
 		SpecialMode: special, Cost: event.Cost, TakeWeapon: event.TakeWeapon, TakeDisposable: event.TakeDisposable,
 		MultiMatch: event.MultiMatch, GameMode: event.GameMode, Name: event.Name, Detail: event.Detail,
 		MinLevel: event.MinLevel, MaxLevel: event.MaxLevel, MinClassID: event.MinClass, MaxClassID: event.MaxClass,
 		When: when, DailyOpen: dailyOpen, DailyClose: dailyClose,
-	}, nil
+	}
+	if converted.Prizes, err = event.prizes(when); err != nil {
+		return zet.Event{}, fmt.Errorf("event %d: %w", event.ID, err)
+	}
+	if p := event.Participation; p != nil {
+		if p.Item != nil && p.Item.Category == "title" {
+			return zet.Event{}, fmt.Errorf("event %d: a participation prize cannot be a title", event.ID)
+		}
+		gift, err := NewGift(event.Name, p.Zet, p.Item)
+		if err != nil {
+			return zet.Event{}, fmt.Errorf("event %d, participation: %w", event.ID, err)
+		}
+		converted.Participation = &gift
+	}
+	return converted, nil
+}
+
+// prizes returns the event's prizes, or what is wrong with them: prizes for an event without a
+// when, which never closes; a bad rank or band; bands that overlap; or a bad gift. The gifts are
+// named after the event, as the login shows them under its name.
+func (event Event) prizes(when calendar.Span) ([]zet.EventPrize, error) {
+	if len(event.Prizes) > 0 && when.Always() {
+		return nil, errors.New("prizes need a when: an event open always never closes")
+	}
+	var prizes []zet.EventPrize
+	for _, p := range event.Prizes {
+		from, to, err := ranks(p.Ranks)
+		if err != nil {
+			return nil, err
+		}
+		if slices.ContainsFunc(prizes, func(q zet.EventPrize) bool { return from <= q.To && q.From <= to }) {
+			return nil, fmt.Errorf("prize ranks %s overlap another prize's", p.Ranks)
+		}
+		prize := zet.EventPrize{From: from, To: to}
+		zg := p.Zet
+		for i := range max(len(p.Items), 1) {
+			var item *GrantItem
+			if i < len(p.Items) {
+				item = &p.Items[i]
+			}
+			gift, err := NewGift(event.Name, zg, item)
+			zg = 0
+			if err != nil {
+				return nil, fmt.Errorf("prize ranks %s: %w", p.Ranks, err)
+			}
+			prize.Gifts = append(prize.Gifts, gift)
+		}
+		prizes = append(prizes, prize)
+	}
+	return prizes, nil
+}
+
+// ranks reads a rank, such as "1", or a band of ranks, such as "11-20".
+func ranks(text string) (from, to int, err error) {
+	first, last, band := strings.Cut(text, "-")
+	if !band {
+		last = first
+	}
+	from, errFrom := strconv.Atoi(first)
+	to, errTo := strconv.Atoi(last)
+	if errFrom != nil || errTo != nil || from < 1 || to < from {
+		return 0, 0, fmt.Errorf("ranks %q is not a rank from 1, such as 1, or a band, such as 11-20", text)
+	}
+	return from, to, nil
 }
 
 // convert returns the grant as the game server hands it out, or what the calendar gets wrong: an

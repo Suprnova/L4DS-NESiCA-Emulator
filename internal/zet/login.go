@@ -126,9 +126,9 @@ func (s *Server) deliverGrants(playerID, chara int64) []delivered {
 	return given
 }
 
-// login counts the login, delivers the gifts due (queued gifts, open grants, and the campaigns'
-// login gifts), and answers with a success header, the daily gifts (dailys), the login ladder
-// gifts (thrus), the queued gifts (comps), the player's settings, their stage progress, the grants
+// login counts the login, delivers the gifts due (event prizes, queued gifts, open grants, and the
+// campaigns' login gifts), and answers with a success header, the daily gifts (dailys), the login
+// ladder gifts (thrus), the event prizes (eventprizes), the queued gifts (comps), the player's settings, their stage progress, the grants
 // and other named gifts (period_bonus), and every slot open. A guest gets the default settings,
 // no progress, and no gifts.
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
@@ -138,6 +138,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	var clears []store.Clear
 	var queued, named []delivered
 	var campaigns loginGifts
+	var prizes []eventPrize
 	if !guest(playerID) {
 		if err := s.store.RecordLogin(playerID, calendar.DayOf(now)); err != nil {
 			slog.Error("record login", "player", playerID, "error", err)
@@ -152,6 +153,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		queued = s.deliverQueued(playerID)
 		named = s.deliverGrants(playerID, player.CharaID)
 		if player.ID != 0 {
+			prizes = s.deliverEventPrizes(player, now)
 			campaigns = s.deliverCampaigns(player, now)
 			named = append(named, campaigns.named...)
 		}
@@ -160,7 +162,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	lines := []string{"1", "1", "0", "0"} // titles
 	lines = append(lines, dailyLines(campaigns.dailys)...)
 	lines = append(lines, thruLines(campaigns.thrus)...)
-	lines = append(lines, "0") // eventprizes
+	lines = append(lines, eventPrizeLines(prizes)...)
 	lines = append(lines, giftGroupLines(queued)...)
 	lines = append(lines, configLines(settings)...)
 	for range unusedLoginLines {

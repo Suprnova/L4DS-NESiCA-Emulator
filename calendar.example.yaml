@@ -36,6 +36,26 @@ versus:
 # there. The official national events ran three weeks from a Thursday at 08:00 to a Wednesday at
 # 23:59, a week or two apart:
 #   when: {start: 2027-04-22, end: "2027-05-12T23:59:59+09:00", every: 4w}
+# A national and a store event may share an id; two national or two store events may not.
+#
+# prizes are given when a run of the event closes: cards are ranked by their total score over the
+# run (ties share a rank), and each card with a prize gets it at its next login, in the event
+# results shown first in the pop-up with its rank and total. ranks is one rank or a band; each
+# item is a page of its own, and zet comes with the first. Items are as for grants (below). An
+# event with prizes needs a when. participation is given once a run, for a card's first play, in
+# that play's result: zet, an item other than a title, or both. The official events gave a title
+# to each of ranks 1 to 10 and one to each band down to 201-400, with item sets by band, and a
+# weapon or skill item pack for taking part:
+#   prizes:
+#     - ranks: 1
+#       items:
+#         - {category: title, id: 101, name: 狩猟王}
+#         - {category: weapon, id: 13, name: M60, count: 30}
+#     - ranks: 11-20
+#       items:
+#         - {category: title, id: 111, name: 狩猟上位20}
+#         - {category: weapon, id: 13, name: M60, count: 5}
+#   participation: {item: {category: skill_item, id: 29, name: チャージャー流し, count: 3}}
 events:
   - id: 1
     type: national

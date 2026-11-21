@@ -229,15 +229,21 @@ func thruLines(gifts []thru) []string {
 	return lines
 }
 
-// resultLines lists the result reply for a chapter that earned rewards (engine.dll 0x10208520):
-// a success header, every group before mode_reward empty and every single value 0 (what the game
-// reads from a header-only reply), then mode_reward, each reward's name, ZG, and item block. In
-// the result reply an empty item is one 0 line (0x10205e20).
-func resultLines(rewards []store.Gift) []string {
+// resultLines lists the result reply for a chapter that earned prizes or rewards (engine.dll
+// 0x10208520): a success header; titles and levels empty; event_prizes, each prize's ZG, a title
+// id of 0 (no title), and item block; every group and value after it empty or 0 (what the game
+// reads from a header-only reply) up to mode_reward, each reward's name, ZG, and item block.
+func resultLines(prizes, rewards []store.Gift) []string {
 	lines := []string{"1", "1", "0",
-		"0",      // titles
-		"0",      // levels
-		"0",      // event_prizes
+		"0", // titles
+		"0", // levels
+		strconv.Itoa(len(prizes)),
+	}
+	for _, gift := range prizes {
+		lines = append(lines, strconv.FormatInt(gift.Zet, 10), "0")
+		lines = append(lines, resultItemLines(gift.Item)...)
+	}
+	lines = append(lines,
 		"0", "0", // class_id, result_id
 		"0", "0", // weapon_slots, item_slots
 		"0",      // stage_end
@@ -247,14 +253,19 @@ func resultLines(rewards []store.Gift) []string {
 		"0", // vs_class_id
 		"0", // revisit_campaign
 		strconv.Itoa(len(rewards)),
-	}
+	)
 	for _, gift := range rewards {
 		lines = append(lines, gift.Name, strconv.FormatInt(gift.Zet, 10))
-		if gift.Item.Kind == 0 {
-			lines = append(lines, "0")
-		} else {
-			lines = append(lines, itemLines(gift.Item)...)
-		}
+		lines = append(lines, resultItemLines(gift.Item)...)
 	}
 	return lines
+}
+
+// resultItemLines lists an item block of the result reply, where no item is one 0 line
+// (0x10205e20).
+func resultItemLines(item store.Owned) []string {
+	if item.Kind == 0 {
+		return []string{"0"}
+	}
+	return itemLines(item)
 }

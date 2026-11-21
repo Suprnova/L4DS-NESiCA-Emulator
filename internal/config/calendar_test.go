@@ -3,6 +3,7 @@ package config_test
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -104,8 +105,43 @@ func TestCalendar_Event_ConvertsAndIsAlwaysOpenWithoutAWhen(t *testing.T) {
 
 	want := zet.Event{ID: 7, Type: zet.EventStore, StageID: 1, ChapterID: 2, Difficulty: 4, SpecialMode: 1, TakeDisposable: true,
 		MultiMatch: true, GameMode: "mutation2", Name: "Headshots", Detail: "Only headshots count.", MinLevel: 5, MaxClassID: 3}
-	if err != nil || len(got.Schedule.Events) != 1 || got.Schedule.Events[0] != want {
+	if err != nil || len(got.Schedule.Events) != 1 || !reflect.DeepEqual(got.Schedule.Events[0], want) {
 		t.Fatalf("Load() = %+v, %v", got.Schedule, err)
+	}
+}
+
+// eventWhen is an event's week, in calendar file text.
+const eventWhen = "when: {start: 2027-04-01, end: 2027-04-07}"
+
+func TestCalendar_EventPrizes_ReadTheRanksAndGifts(t *testing.T) {
+	got, err := loadCalendar(t, `events:
+  - id: 7
+    type: national
+    difficulty: normal
+    name: Hunt
+    `+eventWhen+`
+    prizes:
+      - ranks: 1
+        zet: 500
+        items:
+          - {category: title, id: 11, name: Hunter}
+          - {category: weapon, id: 13, name: M60, count: 30}
+      - {ranks: 11-20, zet: 100}
+    participation: {item: {category: skill_item, id: 29, name: チャージャー流し, count: 2}}
+`)
+
+	if err != nil || len(got.Schedule.Events) != 1 {
+		t.Fatalf("Load() = %+v, %v", got.Schedule, err)
+	}
+	event := got.Schedule.Events[0]
+	first, band := event.Prizes[0], event.Prizes[1]
+	if len(event.Prizes) != 2 || first.From != 1 || first.To != 1 || len(first.Gifts) != 2 ||
+		first.Gifts[0].Zet != 500 || first.Gifts[0].Item.Kind != store.Title || first.Gifts[1].Zet != 0 || first.Gifts[1].Item.Count != 30 ||
+		band.From != 11 || band.To != 20 || len(band.Gifts) != 1 || band.Gifts[0].Zet != 100 || band.Gifts[0].Name != "Hunt" {
+		t.Fatalf("Prizes = %+v", event.Prizes)
+	}
+	if p := event.Participation; p == nil || p.Name != "Hunt" || p.Item.ItemID != 29 || p.Item.Count != 2 {
+		t.Fatalf("Participation = %+v", p)
 	}
 }
 
@@ -181,6 +217,13 @@ func TestCalendar_BadEntries_AreErrors(t *testing.T) {
 		"unknown stage":              "coop_stages:\n  - when: {start: 2027-04-01, end: 2027-04-07, every: 1w}\n    stages: [99]\n",
 		"bad repeat":                 "coop_stages:\n  - when: {start: 2027-04-01, end: 2027-04-07, every: weekly}\n    stages: [1]\n",
 		"bad time":                   "coop_stages:\n  - when: {start: next thursday, end: 2027-04-07}\n    stages: [1]\n",
+		"event, listed twice":        "events:\n  - {id: 2, type: national, difficulty: normal}\n  - {id: 2, type: national_ex, difficulty: normal}\n",
+		"event, prizes, no when":     "events:\n  - {id: 2, name: A, type: national, difficulty: normal, prizes: [{ranks: 1, zet: 100}]}\n",
+		"event, prizes overlap":      "events:\n  - {id: 2, name: A, type: national, difficulty: normal, " + eventWhen + ", prizes: [{ranks: 1-10, zet: 100}, {ranks: 10-20, zet: 50}]}\n",
+		"event, backwards ranks":     "events:\n  - {id: 2, name: A, type: national, difficulty: normal, " + eventWhen + ", prizes: [{ranks: 20-11, zet: 100}]}\n",
+		"event, rank 0":              "events:\n  - {id: 2, name: A, type: national, difficulty: normal, " + eventWhen + ", prizes: [{ranks: 0, zet: 100}]}\n",
+		"event, empty prize":         "events:\n  - {id: 2, name: A, type: national, difficulty: normal, " + eventWhen + ", prizes: [{ranks: 1}]}\n",
+		"event, title participation": "events:\n  - {id: 2, name: A, type: national, difficulty: normal, participation: {item: {category: title, id: 1, name: T}}}\n",
 	}
 
 	for name, text := range entries {

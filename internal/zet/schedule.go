@@ -90,6 +90,12 @@ type Event struct {
 	// DailyOpen and DailyClose are the event's hours, as times whose time of day (UTC) counts;
 	// equal ones mean all day.
 	DailyOpen, DailyClose time.Time
+	// Prizes are given for the ranks of each run, at a ranked card's first login after the run
+	// closes. An always-open event never closes, so it gives none.
+	Prizes []EventPrize
+	// Participation is given for a card's first play in each run, in that play's result reply;
+	// nil gives nothing.
+	Participation *Gift
 }
 
 // startupRuns returns the runs of span that the startup lists send at now: those open now or
