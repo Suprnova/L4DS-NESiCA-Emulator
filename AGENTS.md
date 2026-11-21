@@ -19,6 +19,7 @@ A server for the online services of the arcade game *Left 4 Dead: Survivors* (*L
 | `internal/remote` | The shim-to-server protocol: the server's HTTP handler and the shim's client, a `Backend`. |
 | `internal/server` | Starts everything a server runs, for `l4ds-server` and `l4ds-aio`. |
 | `internal/zet` | The game server: HTTP endpoints, card lookups, the schedule, and rankings. |
+| `internal/calendar` | The schedule's timing: spans that may repeat, and the service day, which turns at 08:00. |
 | `internal/store` | SQLite storage with ordered migrations (`PRAGMA user_version`). |
 | `internal/game` | The game's rules and build 1.26's tables (levels, versus classes, stages, and avatar items), checked against an install when `L4DS_GAME_DIR` is set. |
 | `internal/matching` | The UDP matching master and its rooms. |
