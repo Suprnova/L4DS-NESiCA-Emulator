@@ -63,11 +63,17 @@ server:
 
   # Grants: gifts every card gets once, at its first login from start until end, shown in the
   # login's reward pop-up under their name. A grant gives zet (ZG), an item, or both. An item's
-  # category is weapon, skill_item, or svp; a weapon or skill item needs the id from the game's
-  # catalogue and the name the card shows (weapon names exist only here: the game has none in
-  # Japanese), and becomes the player's own, which the pop-up offers to set into a free slot. svp
-  # needs only a count, in seconds, and lasts the session. A card gets each id once, so give a new
-  # grant a new id.
+  # category is one of:
+  #   weapon, skill_item: the id from the game's catalogue, the name the card shows (weapon names
+  #     exist only here: the game has none in Japanese), and a count;
+  #   title: an id of your choosing and the title's name;
+  #   upper, lower, head, accessory: clothing, a hat, or a face, upper-body, or lower-body
+  #     accessory, named by unit, its setting name in the game's avatar scripts less any survivor
+  #     suffix (firefighter_upper_avt), with a color index from 0 and a name; each card gets its
+  #     own survivor's variant, and a card whose survivor cannot wear it gets only the zet;
+  #   svp: a count, in seconds, which lasts the session.
+  # Items other than svp become the player's own, and the pop-up offers to set them into a free
+  # slot. A card gets each id once, so give a new grant a new id.
   grants:
     - id: 1
       name: サンプル配布

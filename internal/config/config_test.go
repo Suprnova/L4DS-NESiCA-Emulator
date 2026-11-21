@@ -360,3 +360,35 @@ func TestLoad_SVPGrant_NeedsNoIDOrName(t *testing.T) {
 		t.Fatalf("Load() error = %v", err)
 	}
 }
+
+func TestNewGift_AvatarItem_KeepsTheUnitAndColor(t *testing.T) {
+	got, err := config.NewGift("Outfit", 0, &config.GrantItem{Category: "upper", Unit: "firefighter_upper_avt", Color: 2, Name: "Coat"})
+
+	if err != nil || got.Avatar == nil || got.Avatar.Name != "firefighter_upper_avt" || got.Color != 2 || got.Item.Kind != store.Upper || got.Item.Count != 1 {
+		t.Fatalf("NewGift() = %+v, %v", got, err)
+	}
+}
+
+func TestNewGift_Title_IsOneTitle(t *testing.T) {
+	got, err := config.NewGift("Rank", 0, &config.GrantItem{Category: "title", ID: 12, Name: "Rookie"})
+
+	if err != nil || got.Item != (store.Owned{Kind: store.Title, ItemID: 12, Name: "Rookie", Count: 1}) {
+		t.Fatalf("NewGift() = %+v, %v", got, err)
+	}
+}
+
+func TestNewGift_BadAvatarItems_AreErrors(t *testing.T) {
+	items := map[string]config.GrantItem{
+		"unknown unit":   {Category: "upper", Unit: "no_such_avt", Name: "X"},
+		"wrong category": {Category: "lower", Unit: "firefighter_upper_avt", Name: "X"},
+		"bad color":      {Category: "upper", Unit: "firefighter_upper_avt", Color: 100, Name: "X"},
+		"no name":        {Category: "head", Unit: "santahat_head_acc"},
+		"title, no id":   {Category: "title", Name: "Rookie"},
+	}
+
+	for name, item := range items {
+		if _, err := config.NewGift("Gift", 0, &item); err == nil {
+			t.Errorf("%s: NewGift() error = nil", name)
+		}
+	}
+}

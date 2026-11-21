@@ -14,6 +14,7 @@ import (
 
 	"go.yaml.in/yaml/v4"
 
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/game"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/hotkey"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/maintenance"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/store"
@@ -156,13 +157,21 @@ type Grant struct {
 
 // GrantItem is the item a grant gives.
 type GrantItem struct {
-	// Category is weapon, skill_item, or svp.
+	// Category is weapon, skill_item, svp, title, upper, lower, head, or accessory. upper and
+	// lower are clothing, head a hat or other head accessory, and accessory one worn on the face,
+	// upper body, or lower body.
 	Category string `yaml:"category"`
-	// ID is the weapon's or skill item's database id in the game's catalogue; svp has none.
+	// ID is the weapon's or skill item's database id in the game's catalogue, or the title's own
+	// number; svp and avatar items have none.
 	ID int64 `yaml:"id"`
+	// Unit is an avatar item's setting name in the game's avatar scripts, less any survivor
+	// suffix (firefighter_upper_avt for firefighter_upper_avt_y and the others).
+	Unit string `yaml:"unit"`
+	// Color is an avatar item's color index, 0 to 99.
+	Color int `yaml:"color"`
 	// Name is shown in the pop-up, and on the card once the item is set; svp has none.
 	Name string `yaml:"name"`
-	// Count is how many, or for svp the seconds.
+	// Count is how many weapons or skill items, or for svp the seconds; other items are one.
 	Count int64 `yaml:"count"`
 }
 
@@ -364,7 +373,10 @@ func (s Server) Schedule() (zet.Schedule, error) {
 }
 
 // itemCategories maps grant item categories to the game's item categories.
-var itemCategories = map[string]store.ItemKind{"weapon": store.Weapon, "skill_item": store.SkillItem, "svp": store.SVP}
+var itemCategories = map[string]store.ItemKind{
+	"weapon": store.Weapon, "skill_item": store.SkillItem, "svp": store.SVP, "title": store.Title,
+	"upper": store.Upper, "lower": store.Lower, "head": store.Head, "accessory": store.Accessory,
+}
 
 // convert returns the grant as the game server hands it out, or what the configuration gets
 // wrong: an id below 1, an end not after the start, or a bad gift (see [NewGift]).
@@ -379,38 +391,60 @@ func (g Grant) convert() (zet.Grant, error) {
 	if err != nil {
 		return zet.Grant{}, err
 	}
-	return zet.Grant{ID: g.ID, Start: g.Start, End: g.End, Gift: zet.Gift{Gift: gift}}, nil
+	return zet.Grant{ID: g.ID, Start: g.Start, End: g.End, Gift: gift}, nil
 }
 
-// NewGift returns the gift of name, zet ZG, and item (none when nil), or what is wrong with it:
-// no name, negative ZG, nothing to give, or an item without a known category, a count, or (unless
-// svp) an id and a name.
-func NewGift(name string, zet int64, item *GrantItem) (store.Gift, error) {
+// NewGift returns the gift of name, zg ZG, and item (none when nil), or what is wrong with it: no
+// name, negative ZG, nothing to give, an unknown item category, or an item without what its
+// category needs. A weapon or skill item needs an id, a name, and a count, svp a count, a title an
+// id and a name, and an avatar item a name, a color from 0 to 99, and a unit worn where its
+// category says.
+func NewGift(name string, zg int64, item *GrantItem) (zet.Gift, error) {
 	switch {
 	case name == "":
-		return store.Gift{}, errors.New("name must not be empty")
-	case zet < 0:
-		return store.Gift{}, errors.New("zet is negative")
-	case zet == 0 && item == nil:
-		return store.Gift{}, errors.New("gives neither zet nor an item")
+		return zet.Gift{}, errors.New("name must not be empty")
+	case zg < 0:
+		return zet.Gift{}, errors.New("zet is negative")
+	case zg == 0 && item == nil:
+		return zet.Gift{}, errors.New("gives neither zet nor an item")
 	}
-	gift := store.Gift{Name: name, Zet: zet}
+	gift := zet.Gift{Gift: store.Gift{Name: name, Zet: zg}}
 	if item == nil {
 		return gift, nil
 	}
 	kind, ok := itemCategories[item.Category]
-	switch {
-	case !ok:
-		return store.Gift{}, fmt.Errorf("unknown item category %q", item.Category)
-	case item.Count < 1:
-		return store.Gift{}, errors.New("item count must be at least 1")
-	case kind != store.SVP && (item.ID < 1 || item.Name == ""):
-		return store.Gift{}, fmt.Errorf("a %s needs an id and a name", item.Category)
+	if !ok {
+		return zet.Gift{}, fmt.Errorf("unknown item category %q", item.Category)
 	}
 	gift.Item = store.Owned{Kind: kind, ItemID: item.ID, Name: item.Name, Count: item.Count}
+	switch {
+	case kind.Wearable():
+		avatar, found := game.Avatar(item.Unit)
+		switch {
+		case !found:
+			return zet.Gift{}, fmt.Errorf("unknown avatar unit %q", item.Unit)
+		case zet.KindOf(avatar.Site) != kind:
+			return zet.Gift{}, fmt.Errorf("avatar unit %s is not a %s item", item.Unit, item.Category)
+		case item.Color < 0 || item.Color > 99:
+			return zet.Gift{}, fmt.Errorf("color %d is not 0 to 99", item.Color)
+		case item.Name == "":
+			return zet.Gift{}, fmt.Errorf("a %s needs a name", item.Category)
+		}
+		gift.Avatar, gift.Color, gift.Item.ItemID = &avatar, item.Color, 0
+	case kind == store.SVP:
+		if item.Count < 1 {
+			return zet.Gift{}, errors.New("svp count must be at least 1")
+		}
+	case item.ID < 1 || item.Name == "":
+		return zet.Gift{}, fmt.Errorf("a %s needs an id and a name", item.Category)
+	case kind.Stacks() && item.Count < 1:
+		return zet.Gift{}, errors.New("item count must be at least 1")
+	}
+	if !kind.Stacks() && kind != store.SVP {
+		gift.Item.Count = 1
+	}
 	return gift, nil
 }
-
 func lookup(what string, id int, key string, values map[string]int, name string) (int, error) {
 	value, ok := values[name]
 	if !ok {

@@ -19,8 +19,10 @@ func grant(args []string) error {
 	card := flags.String("card", "", "16-digit number of the card whose player gets the gift")
 	name := flags.String("name", "", "the gift's name, shown in the login's reward pop-up")
 	zet := flags.Int64("zet", 0, "ZG given")
-	category := flags.String("item", "", "category of the item given: weapon, skill_item, or svp; left out, no item")
-	itemID := flags.Int64("item-id", 0, "the weapon's or skill item's database id in the game's catalogue")
+	category := flags.String("item", "", "category of the item given: weapon, skill_item, svp, title, upper, lower, head, or accessory; left out, no item")
+	itemID := flags.Int64("item-id", 0, "the weapon's or skill item's database id in the game's catalogue, or the title's number")
+	unit := flags.String("unit", "", "an avatar item's setting name in the game's avatar scripts, less any survivor suffix")
+	color := flags.Int("color", 0, "an avatar item's color index, 0 to 99")
 	itemName := flags.String("item-name", "", "the item's name, shown in the pop-up and on the card once set")
 	count := flags.Int64("count", 1, "how many of the item, or the seconds of svp")
 	if err := flags.Parse(args); err != nil {
@@ -35,7 +37,7 @@ func grant(args []string) error {
 
 	var item *config.GrantItem
 	if *category != "" {
-		item = &config.GrantItem{Category: *category, ID: *itemID, Name: *itemName, Count: *count}
+		item = &config.GrantItem{Category: *category, ID: *itemID, Unit: *unit, Color: *color, Name: *itemName, Count: *count}
 	}
 	gift, err := config.NewGift(*name, *zet, item)
 	if err != nil {
@@ -57,7 +59,11 @@ func grant(args []string) error {
 	if err != nil {
 		return err
 	}
-	id, err := s.Queue(player.ID, time.Now(), gift)
+	given, fits := gift.For(player.CharaID)
+	if !fits {
+		return fmt.Errorf("grant: %s's survivor cannot wear %s", player.Name, *unit)
+	}
+	id, err := s.Queue(player.ID, time.Now(), given)
 	if err != nil {
 		return err
 	}

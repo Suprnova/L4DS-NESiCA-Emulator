@@ -74,7 +74,7 @@ Run these from the repository.
 go run ./cmd/l4ds-server grant -card <16-digit card number> -name おわび -zet 1000 -item skill_item -item-id 21 -item-name 胆汁ガード -count 2
 ```
 
-`-item` is `weapon`, `skill_item`, or `svp`; `go run ./cmd/l4ds-server grant -h` lists every flag.
+`-item` is `weapon`, `skill_item`, `svp`, `title`, or an avatar item (`upper`, `lower`, `head`, or `accessory`, named with `-unit` and `-color` as the grants in `l4ds.example.yaml` describe); `go run ./cmd/l4ds-server grant -h` lists every flag.
 
 ## Trees
 
