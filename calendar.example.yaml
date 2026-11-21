@@ -1,0 +1,105 @@
+# Calendar for l4ds-server and l4ds-aio: what the server offers and when. The configuration file's
+# server.calendar names it. Every key is optional; unknown keys are an error.
+#
+# Each entry's when says when it is open: from start until end, and when every is given, again
+# every so often after that, the last time starting no later than until.
+#   start, end, until: an RFC 3339 timestamp ("2027-04-22T08:00:00+09:00") or a date in the
+#     server's time zone (2027-04-22). A date stands for its service day, from 08:00, when the day
+#     turns as the official service's did, to 08:00 the next morning: a start date means its
+#     08:00, and an end or until date the 08:00 after it.
+#   every: a count of days, weeks, or years: 1d, 2w, 1y. Each time must end before the next starts.
+# The game fetches versus, the events, and the stage lists when it starts, so it sees what is open
+# then and what starts by the next 08:00; restart a game, as the official cabinets were during the
+# morning maintenance, for it to see what comes after.
+
+# The national versus schedule. The mode select offers versus while a unit is open. Difficulty is
+# easy, normal, advanced, or expert. Cost is the SVP to enter; 0 uses the cabinet's own versus
+# setting. game_mode is a mode from update\scripts\gamemodes.txt: arcade versus is Versus
+# Survival, mutation15 (survival-based, with player-controlled infected), whose rounds the arcade
+# server scores and ends itself. Plain versus runs the stock campaign versus.
+versus:
+  - id: 1
+    stage: 1 # Dead Center
+    chapter: 1
+    difficulty: normal
+    cost: 0
+    take_weapon: false
+    game_mode: mutation15
+    when: {start: 2026-01-01, end: 2030-12-31}
+
+# Events. type is national, store, national_ex, or store_ex; a store event is offered only when its
+# id equals the cabinet's store event id (test menu). An event is open when its when says (always,
+# when left out) and during its daily hours (daily_open to daily_close as HH:MM in the server's
+# time zone; all day, when left out). god shows a fifth "GOD" difficulty badge. multi_match events
+# gather players before starting, which the server does not support yet. detail is shown on the
+# announcement; "|" starts a new line. The level and class bounds are the entry conditions shown
+# there. The official national events ran three weeks from a Thursday at 08:00 to a Wednesday at
+# 23:59, a week or two apart:
+#   when: {start: 2027-04-22, end: "2027-05-12T23:59:59+09:00", every: 4w}
+events:
+  - id: 1
+    type: national
+    stage: 1
+    chapter: 1
+    difficulty: normal
+    take_weapon: true
+    take_disposable: true
+    game_mode: mutation2 # headshots only
+    name: サンプル全国イベント
+    detail: l4ds-aio の試験用イベントです。|ヘッドショットのみ有効。
+  - id: 1
+    type: store
+    stage: 1
+    chapter: 1
+    difficulty: normal
+    take_weapon: true
+    take_disposable: true
+    game_mode: mutation2
+    name: サンプル店内イベント
+    detail: l4ds-aio の試験用イベントです。
+
+# Grants: gifts every card gets once each time a grant is open, at its first login then, shown in
+# the login's reward pop-up under their name. A grant that repeats gives again each time: every: 1d
+# gives once a day, from 08:00 to 08:00 with whole-day dates. A grant gives zet (ZG), an item, or
+# both. An item's category is one of:
+#   weapon, skill_item: the id from the game's catalogue, the name the card shows (weapon names
+#     exist only here: the game has none in Japanese), and a count;
+#   title: an id of your choosing and the title's name;
+#   upper, lower, head, accessory: clothing, a hat, or a face, upper-body, or lower-body
+#     accessory, named by unit, its setting name in the game's avatar scripts less any survivor
+#     suffix (firefighter_upper_avt), with a color index from 0 and a name; each card gets its
+#     own survivor's variant, and a card whose survivor cannot wear it gets only the zet;
+#   svp: a count, in seconds, which lasts the session.
+# Items other than svp become the player's own, and the pop-up offers to set them into a free
+# slot. A card gets each time of an id once, so give a new grant a new id. For one card, use
+# l4ds-server grant instead.
+grants:
+  - id: 1
+    name: サンプル配布
+    when: {start: 2026-01-01, end: 2030-12-31}
+    zet: 500
+    item:
+      category: weapon
+      id: 6
+      name: AK-47
+      count: 5
+
+# National co-op stage lists. While a list is open, national co-op offers only its stages (by
+# stage id, in order); with none open, it offers every stage. Single play, store co-op, and clan
+# co-op always offer every stage. The official list was four stages, changed every Thursday at
+# 08:00, as these two lists do, taking turns a week each:
+# coop_stages:
+#   - when: {start: 2027-04-01, end: 2027-04-07, every: 2w}
+#     stages: [1, 2, 3, 13]
+#   - when: {start: 2027-04-08, end: 2027-04-14, every: 2w}
+#     stages: [2, 3, 4, 13]
+
+# Maintenance windows. During a window every game is offline in maintenance; warn ahead of one,
+# games are told it is coming and count down the minutes. Windows may overlap or extend each
+# other. warn is a duration such as 30m; left out, games are not warned. Left out entirely, there
+# is no maintenance. The official service's ran daily from 06:00 to 08:00, extended twice:
+# maintenance:
+#   warn: 30m
+#   windows:
+#     - when: {start: "2026-01-01T06:00:00+09:00", end: "2026-01-01T08:00:00+09:00", every: 1d}
+#     - when: {start: "2027-01-01T00:00:00+09:00", end: "2027-01-01T09:15:00+09:00"}

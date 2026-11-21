@@ -19,7 +19,7 @@ type Flags struct {
 // NewFlags defines a server's flags on flags.
 func NewFlags(flags *flag.FlagSet) *Flags {
 	return &Flags{
-		config:        flags.String("config", "", "YAML configuration file (see l4ds.example.yaml); without it, one store, \"L4DS Emulator\" in Tokyo, and nothing scheduled"),
+		config:        flags.String("config", "", "YAML configuration file (see l4ds.example.yaml); without it, one store, \"L4DS Emulator\" in Tokyo, and no calendar, so nothing scheduled"),
 		database:      flags.String("db", "l4ds.db", "SQLite database holding the players"),
 		master:        flags.String("master", ":27010", "UDP address of the matching master"),
 		gameServerLog: flags.String("game-server", "", "UDP address to log game server queries on, such as :27015; it blocks the game's own listen server there"),

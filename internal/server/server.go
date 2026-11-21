@@ -68,14 +68,7 @@ type Server struct {
 // Start opens the database and starts the matching master, the room servers, and, when asked,
 // the endpoint shims connect to. Cancelling ctx stops the room servers; Close stops the rest.
 func Start(ctx context.Context, options Options) (*Server, error) {
-	schedule, err := options.Config.Schedule()
-	if err != nil {
-		return nil, err
-	}
-	windows, err := options.Config.Maintenance.Schedule()
-	if err != nil {
-		return nil, err
-	}
+	schedule := options.Config.Schedule
 	hosts, pool, err := roomHosts(options.Rooms)
 	if err != nil {
 		return nil, err
@@ -84,7 +77,7 @@ func Start(ctx context.Context, options Options) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{players: players, stores: options.Config.Stores, maintenance: windows, closers: []func() error{players.Close}}
+	s := &Server{players: players, stores: options.Config.Stores, maintenance: options.Config.Maintenance, closers: []func() error{players.Close}}
 
 	storeName := storeNames(options.Config.Stores)
 	rooms := matching.NewMaster(matching.Config{
@@ -139,7 +132,7 @@ func Start(ctx context.Context, options Options) (*Server, error) {
 			close(s.poolDone)
 		}()
 	}
-	slog.Info("server started", "stores", len(options.Config.Stores), "versus units", len(schedule.Versus), "events", len(schedule.Events), "grants", len(schedule.Grants))
+	slog.Info("server started", "stores", len(options.Config.Stores), "versus units", len(schedule.Versus), "events", len(schedule.Events), "grants", len(schedule.Grants), "co-op stage lists", len(schedule.CoopStages))
 	return s, nil
 }
 

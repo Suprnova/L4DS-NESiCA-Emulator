@@ -27,7 +27,7 @@ A server for the online services of the arcade game *Left 4 Dead: Survivors* (*L
 | `internal/dedicated` | The pool of dedicated servers that host rooms, watched over RCON. |
 | `internal/rcon` | Source RCON client. |
 | `internal/gametree` | Tree building and the byte patches, each with its reason. |
-| `internal/config` | The YAML configuration (`l4ds.example.yaml` describes every key). |
+| `internal/config` | The YAML configuration and the server's calendar file (`l4ds.example.yaml` and `calendar.example.yaml` describe every key). |
 
 ## Commands
 

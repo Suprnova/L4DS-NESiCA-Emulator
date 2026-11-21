@@ -15,90 +15,10 @@ server:
       name: L4DS Emulator
       prefecture: Tokyo
 
-  # The national versus schedule. The mode select offers versus while a unit is open, from start
-  # until end. Difficulty is easy, normal, advanced, or expert. Cost is the SVP to enter; 0 uses
-  # the cabinet's own versus setting. game_mode is a mode from update\scripts\gamemodes.txt:
-  # arcade versus is Versus Survival, mutation15 (survival-based, with player-controlled infected),
-  # whose rounds the arcade server scores and ends itself. Plain versus runs the stock campaign
-  # versus.
-  versus:
-    - id: 1
-      stage: 1 # Dead Center
-      chapter: 1
-      difficulty: normal
-      cost: 0
-      take_weapon: false
-      game_mode: mutation15
-      start: 2026-01-01T00:00:00+09:00
-      end: 2031-01-01T00:00:00+09:00
-
-  # Events. type is national, store, national_ex, or store_ex; a store event is offered only when
-  # its id equals the cabinet's store event id (test menu). An event is open during its period
-  # (open to close; always, when left out) and its daily hours (daily_open to daily_close as HH:MM
-  # in the server's time zone; all day, when left out). god shows a fifth "GOD" difficulty badge.
-  # multi_match events gather players before starting, which the server does not support yet.
-  # detail is shown on the announcement; "|" starts a new line. The level and class bounds are the
-  # entry conditions shown there.
-  events:
-    - id: 1
-      type: national
-      stage: 1
-      chapter: 1
-      difficulty: normal
-      take_weapon: true
-      take_disposable: true
-      game_mode: mutation2 # headshots only
-      name: サンプル全国イベント
-      detail: l4ds-aio の試験用イベントです。|ヘッドショットのみ有効。
-    - id: 1
-      type: store
-      stage: 1
-      chapter: 1
-      difficulty: normal
-      take_weapon: true
-      take_disposable: true
-      game_mode: mutation2
-      name: サンプル店内イベント
-      detail: l4ds-aio の試験用イベントです。
-
-  # Grants: gifts every card gets once, at its first login from start until end, shown in the
-  # login's reward pop-up under their name. A grant gives zet (ZG), an item, or both. An item's
-  # category is one of:
-  #   weapon, skill_item: the id from the game's catalogue, the name the card shows (weapon names
-  #     exist only here: the game has none in Japanese), and a count;
-  #   title: an id of your choosing and the title's name;
-  #   upper, lower, head, accessory: clothing, a hat, or a face, upper-body, or lower-body
-  #     accessory, named by unit, its setting name in the game's avatar scripts less any survivor
-  #     suffix (firefighter_upper_avt), with a color index from 0 and a name; each card gets its
-  #     own survivor's variant, and a card whose survivor cannot wear it gets only the zet;
-  #   svp: a count, in seconds, which lasts the session.
-  # Items other than svp become the player's own, and the pop-up offers to set them into a free
-  # slot. A card gets each id once, so give a new grant a new id.
-  grants:
-    - id: 1
-      name: サンプル配布
-      start: 2026-01-01T00:00:00+09:00
-      end: 2031-01-01T00:00:00+09:00
-      zet: 500
-      item:
-        category: weapon
-        id: 6
-        name: AK-47
-        count: 5
-
-  # Maintenance windows. During a window every game is offline in maintenance; warn ahead of one,
-  # games are told it is coming and count down the minutes. daily_start and daily_end are a window
-  # every day as HH:MM in the server's time zone (an end before the start runs past midnight);
-  # windows are one-off windows, which may overlap or extend the daily one. warn is a duration such
-  # as 30m; left out, games are not warned. Left out entirely, there is no maintenance. The
-  # official service's ran daily from 06:00 to 08:00.
-  # maintenance:
-  #   warn: 30m
-  #   daily_start: "06:00"
-  #   daily_end: "08:00"
-  #   windows:
-  #     - start: 2027-01-01T00:00:00+09:00
-  #       end: 2027-01-01T09:15:00+09:00
+  # The calendar file: what the server offers and when (versus, events, gifts, the national co-op
+  # stage list, and maintenance). calendar.example.yaml describes it. A relative path is from this
+  # file's folder. Left out, nothing is scheduled, and versus and the event modes stay unavailable.
+  calendar: calendar.example.yaml
 
 shim:
   # The server's address. l4ds-aio ignores it: its server runs in the same process.
