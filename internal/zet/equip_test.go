@@ -11,12 +11,14 @@ import (
 
 var lastGrant int64
 
-// give gives a player items to own, as a grant of its own.
+// give gives a player items to own, each as a grant of its own.
 func give(t *testing.T, s *store.Store, playerID int64, items ...store.Owned) {
 	t.Helper()
-	lastGrant++
-	if _, err := s.Deliver(playerID, lastGrant, time.Now(), 0, items...); err != nil {
-		t.Fatal(err)
+	for _, item := range items {
+		lastGrant++
+		if _, err := s.Deliver(playerID, lastGrant, time.Now(), store.Gift{Name: "Gift", Item: item}); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 

@@ -22,16 +22,10 @@ type Schedule struct {
 // any, then one for its item.
 type Grant struct {
 	// ID tells grants apart: a card that had the grant with an id does not get it again.
-	ID   int
-	Name string
+	ID int
 	// Start and End bound when the grant is open: from Start, until End.
 	Start, End time.Time
-	// Zet is the ZG given, added to the player's ZG.
-	Zet int64
-	// Item is the item given, or none when its Kind is 0. A weapon or skill item is then owned
-	// by the player, who can set it into a slot from the pop-up; SVP is credited by the game
-	// itself, and Count is then the seconds.
-	Item store.Owned
+	store.Gift
 }
 
 // Open reports whether the grant is open at t.

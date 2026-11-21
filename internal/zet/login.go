@@ -10,9 +10,9 @@ import (
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/store"
 )
 
-// Lines of the login reply that carry no data: the count of each empty group (titles, dailys,
-// thrus, eventprizes, comps).
-const emptyGroups = 5
+// emptyGroups is the number of groups the login reply sends empty, each as a count of 0: titles,
+// dailys, thrus, and eventprizes. comps follows them.
+const emptyGroups = 4
 
 // defaultBindings is the number of config_values after the settings: the controller, mouse
 // button and radio bindings, which the cabinet never changes. 0 keeps the game's defaults.
@@ -70,21 +70,48 @@ var membershipLines = []string{"0", "1", "0"}
 // slotLines are item_slot and weapon_slot, which open every skill item and weapon slot.
 var slotLines = []string{strconv.Itoa(store.Slots), strconv.Itoa(store.Slots)}
 
-// periodBonusLines lists the period_bonus group: the number of grants, then for each its id,
-// name, and ZG, and its item block (id, category, name, count, resource id, color index, replace,
-// and rare). A weapon's resource id is its id; everything else has 0.
+// giftLines lists one entry of the comps or period_bonus group: its id, name, and ZG, and its
+// item block (id, category, name, count, resource id, color index, replace, and rare). A weapon's
+// resource id is its id; everything else has 0.
+func giftLines(id int64, gift store.Gift) []string {
+	resource := int64(0)
+	if gift.Item.Kind == store.Weapon {
+		resource = gift.Item.ItemID
+	}
+	return []string{strconv.FormatInt(id, 10), gift.Name, strconv.FormatInt(gift.Zet, 10),
+		strconv.FormatInt(gift.Item.ItemID, 10), strconv.FormatInt(int64(gift.Item.Kind), 10), gift.Item.Name,
+		strconv.FormatInt(gift.Item.Count, 10), strconv.FormatInt(resource, 10), "0", "0", "0"}
+}
+
+// compLines lists the comps group: the number of gifts queued for the player, then each one.
+func compLines(gifts []store.QueuedGift) []string {
+	lines := []string{strconv.Itoa(len(gifts))}
+	for _, g := range gifts {
+		lines = append(lines, giftLines(g.ID, g.Gift)...)
+	}
+	return lines
+}
+
+// periodBonusLines lists the period_bonus group: the number of grants, then each one.
 func periodBonusLines(grants []Grant) []string {
 	lines := []string{strconv.Itoa(len(grants))}
 	for _, g := range grants {
-		resource := int64(0)
-		if g.Item.Kind == store.Weapon {
-			resource = g.Item.ItemID
-		}
-		lines = append(lines, strconv.Itoa(g.ID), g.Name, strconv.FormatInt(g.Zet, 10),
-			strconv.FormatInt(g.Item.ItemID, 10), strconv.FormatInt(int64(g.Item.Kind), 10), g.Item.Name,
-			strconv.FormatInt(g.Item.Count, 10), strconv.FormatInt(resource, 10), "0", "0", "0")
+		lines = append(lines, giftLines(int64(g.ID), g.Gift)...)
 	}
 	return lines
+}
+
+// deliverQueued gives a player the gifts queued for them, and returns them.
+func (s *Server) deliverQueued(playerID int64) []store.QueuedGift {
+	gifts, err := s.store.DeliverQueued(playerID, s.now())
+	if err != nil {
+		slog.Error("deliver queued gifts", "player", playerID, "error", err)
+		return nil
+	}
+	for _, g := range gifts {
+		slog.Info("queued gift delivered", "player", playerID, "gift", g.ID, "name", g.Name)
+	}
+	return gifts
 }
 
 // deliverGrants gives a player the grants open now that they have not had, and returns them.
@@ -95,11 +122,7 @@ func (s *Server) deliverGrants(playerID int64) []Grant {
 		if !g.Open(now) {
 			continue
 		}
-		var items []store.Owned
-		if g.Item.Kind == store.Weapon || g.Item.Kind == store.SkillItem {
-			items = append(items, g.Item)
-		}
-		ok, err := s.store.Deliver(playerID, int64(g.ID), now, g.Zet, items...)
+		ok, err := s.store.Deliver(playerID, int64(g.ID), now, g.Gift)
 		if err != nil {
 			slog.Error("deliver grant", "player", playerID, "grant", g.ID, "error", err)
 			continue
@@ -112,13 +135,15 @@ func (s *Server) deliverGrants(playerID int64) []Grant {
 	return delivered
 }
 
-// login counts the login, delivers the open grants the player has not had, and answers with a
-// success header, the player's settings, their stage progress, the grants, and every slot open.
-// A guest gets the default settings, no progress, and no grants.
+// login counts the login, delivers the gifts queued for the player and the open grants they have
+// not had, and answers with a success header, the queued gifts (comps), the player's settings,
+// their stage progress, the grants (period_bonus), and every slot open. A guest gets the default
+// settings, no progress, and no gifts.
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	playerID := formInt(r, "player_id")
 	settings := store.DefaultSettings
 	var clears []store.Clear
+	var queued []store.QueuedGift
 	var grants []Grant
 	if !guest(playerID) {
 		if err := s.store.RecordLogin(playerID); err != nil {
@@ -131,6 +156,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		if clears, err = s.store.Clears(playerID); err != nil {
 			slog.Error("load clears", "player", playerID, "error", err)
 		}
+		queued = s.deliverQueued(playerID)
 		grants = s.deliverGrants(playerID)
 	}
 
@@ -138,6 +164,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	for range emptyGroups {
 		lines = append(lines, "0")
 	}
+	lines = append(lines, compLines(queued)...)
 	lines = append(lines, configLines(settings)...)
 	for range unusedLoginLines {
 		lines = append(lines, "0")

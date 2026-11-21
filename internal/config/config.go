@@ -382,7 +382,7 @@ func (g Grant) convert() (zet.Grant, error) {
 	case g.Zet == 0 && g.Item == nil:
 		return zet.Grant{}, errors.New("gives neither zet nor an item")
 	}
-	grant := zet.Grant{ID: g.ID, Name: g.Name, Start: g.Start, End: g.End, Zet: g.Zet}
+	grant := zet.Grant{ID: g.ID, Start: g.Start, End: g.End, Gift: store.Gift{Name: g.Name, Zet: g.Zet}}
 	if g.Item == nil {
 		return grant, nil
 	}

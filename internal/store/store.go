@@ -120,6 +120,18 @@ var migrations = []string{
 		delivered_at INTEGER NOT NULL,
 		PRIMARY KEY (player_id, grant_id)
 	)`,
+	`CREATE TABLE queued_grants (
+		id           INTEGER PRIMARY KEY,
+		player_id    INTEGER NOT NULL REFERENCES players (id),
+		name         TEXT    NOT NULL,
+		zet          INTEGER NOT NULL,
+		kind         INTEGER NOT NULL,
+		item_id      INTEGER NOT NULL,
+		item_name    TEXT    NOT NULL,
+		item_count   INTEGER NOT NULL,
+		queued_at    INTEGER NOT NULL,
+		delivered_at INTEGER
+	)`,
 }
 
 // settingsColumns lists the columns holding a player's [Settings], in field order.

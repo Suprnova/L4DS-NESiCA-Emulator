@@ -9,57 +9,29 @@ import (
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/store"
 )
 
+var lastGrant int64
+
+// own gives a player items to own, each as a scheduled grant of its own.
+func own(t *testing.T, s *store.Store, playerID int64, items ...store.Owned) {
+	t.Helper()
+	for _, item := range items {
+		lastGrant++
+		if _, err := s.Deliver(playerID, lastGrant, delivered, store.Gift{Name: "Gift", Item: item}); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 var (
 	hunterCounter = store.Owned{Kind: store.SkillItem, ItemID: 30, Name: "ハンター返し", Count: 3}
 	rifle         = store.Owned{Kind: store.Weapon, ItemID: 6, Name: "AK-47", Count: 5}
 	delivered     = time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
 )
 
-func TestDeliver_GivesTheZetAndTheItems(t *testing.T) {
-	s := openStore(t)
-	player := register(t, s)
-
-	ok, err := s.Deliver(player.ID, 1, delivered, 500, hunterCounter, rifle)
-
-	got, _ := s.Owned(player.ID)
-	updated, _ := s.Player(player.ID)
-	if !ok || err != nil || updated.Zet != 500 || !slices.Equal(got, []store.Owned{rifle, hunterCounter}) {
-		t.Fatalf("Deliver() = %v, %v; zet %d, owned %+v", ok, err, updated.Zet, got)
-	}
-}
-
-func TestDeliver_SameGrantAgain_GivesNothing(t *testing.T) {
-	s := openStore(t)
-	player := register(t, s)
-	s.Deliver(player.ID, 1, delivered, 500, rifle)
-
-	ok, err := s.Deliver(player.ID, 1, delivered, 500, rifle)
-
-	got, _ := s.Owned(player.ID)
-	updated, _ := s.Player(player.ID)
-	if ok || err != nil || updated.Zet != 500 || !slices.Equal(got, []store.Owned{rifle}) {
-		t.Fatalf("Deliver() = %v, %v; zet %d, owned %+v", ok, err, updated.Zet, got)
-	}
-}
-
-func TestDeliver_AnotherGrantOfTheSameItem_AddsToTheStack(t *testing.T) {
-	s := openStore(t)
-	player := register(t, s)
-	s.Deliver(player.ID, 1, delivered, 0, rifle)
-
-	s.Deliver(player.ID, 2, delivered, 0, rifle)
-
-	want := rifle
-	want.Count = 10
-	if got, _ := s.Owned(player.ID); !slices.Equal(got, []store.Owned{want}) {
-		t.Fatalf("Owned() = %+v, want %+v", got, want)
-	}
-}
-
 func TestEquip_OwnedItem_MovesIntoTheSlotWithItsName(t *testing.T) {
 	s := openStore(t)
 	player := register(t, s)
-	s.Deliver(player.ID, 1, delivered, 0, rifle)
+	own(t, s, player.ID, rifle)
 
 	count, err := s.Equip(player.ID, store.Weapon, 1, 6, 5)
 
@@ -74,7 +46,7 @@ func TestEquip_OwnedItem_MovesIntoTheSlotWithItsName(t *testing.T) {
 func TestEquip_MoreThanOwned_MovesWhatIsOwned(t *testing.T) {
 	s := openStore(t)
 	player := register(t, s)
-	s.Deliver(player.ID, 1, delivered, 0, hunterCounter)
+	own(t, s, player.ID, hunterCounter)
 
 	count, err := s.Equip(player.ID, store.SkillItem, 2, 30, 10)
 
@@ -86,7 +58,7 @@ func TestEquip_MoreThanOwned_MovesWhatIsOwned(t *testing.T) {
 func TestEquip_PartOfTheStack_LeavesTheRestOwned(t *testing.T) {
 	s := openStore(t)
 	player := register(t, s)
-	s.Deliver(player.ID, 1, delivered, 0, rifle)
+	own(t, s, player.ID, rifle)
 
 	s.Equip(player.ID, store.Weapon, 1, 6, 2)
 
@@ -100,7 +72,7 @@ func TestEquip_PartOfTheStack_LeavesTheRestOwned(t *testing.T) {
 func TestEquip_SameItemAgain_AddsToTheSlot(t *testing.T) {
 	s := openStore(t)
 	player := register(t, s)
-	s.Deliver(player.ID, 1, delivered, 0, rifle)
+	own(t, s, player.ID, rifle)
 	s.Equip(player.ID, store.Weapon, 1, 6, 2)
 
 	count, err := s.Equip(player.ID, store.Weapon, 1, 6, 3)
@@ -114,7 +86,7 @@ func TestEquip_OtherItem_ReturnsTheSlotsItemToTheOwned(t *testing.T) {
 	s := openStore(t)
 	player := register(t, s)
 	shotgun := store.Owned{Kind: store.Weapon, ItemID: 1, Name: "ポンプ式ショットガン", Count: 2}
-	s.Deliver(player.ID, 1, delivered, 0, rifle, shotgun)
+	own(t, s, player.ID, rifle, shotgun)
 	s.Equip(player.ID, store.Weapon, 1, 6, 5)
 
 	s.Equip(player.ID, store.Weapon, 1, 1, 2)
@@ -141,7 +113,7 @@ func TestEquip_ItemNotOwned_ReturnsErrNotOwned(t *testing.T) {
 func TestChangeCounts_TakesOffTheCountAndEmptiesSlotsThatRunOut(t *testing.T) {
 	s := openStore(t)
 	player := register(t, s)
-	s.Deliver(player.ID, 1, delivered, 0, hunterCounter, store.Owned{Kind: store.Weapon, ItemID: 6, Count: 1})
+	own(t, s, player.ID, hunterCounter, store.Owned{Kind: store.Weapon, ItemID: 6, Count: 1})
 	s.Equip(player.ID, store.SkillItem, 1, 30, 3)
 	s.Equip(player.ID, store.Weapon, 2, 6, 1)
 
@@ -158,7 +130,7 @@ func TestChangeCounts_TakesOffTheCountAndEmptiesSlotsThatRunOut(t *testing.T) {
 func TestChangeCounts_OnlyTouchesTheGivenKind(t *testing.T) {
 	s := openStore(t)
 	player := register(t, s)
-	s.Deliver(player.ID, 1, delivered, 0, hunterCounter)
+	own(t, s, player.ID, hunterCounter)
 	s.Equip(player.ID, store.SkillItem, 1, 30, 3)
 
 	s.ChangeCounts(player.ID, store.Weapon, map[int64]int64{1: -3})

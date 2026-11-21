@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"time"
 )
 
 // ItemKind is the kind of an item, numbered as the game's item categories (item_cgr_id).
@@ -86,34 +85,6 @@ func (s *Store) Owned(playerID int64) ([]Owned, error) {
 		owned = append(owned, item)
 	}
 	return owned, rows.Err()
-}
-
-// Deliver gives a player a grant: zet ZG and the items, which the player then owns, recorded as
-// delivered at the given time. A grant is delivered once: when it was delivered to the player
-// before, Deliver gives nothing and reports false.
-func (s *Store) Deliver(playerID, grantID int64, at time.Time, zet int64, items ...Owned) (bool, error) {
-	tx, err := s.db.Begin()
-	if err != nil {
-		return false, err
-	}
-	defer tx.Rollback()
-
-	outcome, err := tx.Exec(`INSERT INTO grant_deliveries (player_id, grant_id, delivered_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING`, playerID, grantID, at.Unix())
-	if err != nil {
-		return false, err
-	}
-	if n, err := outcome.RowsAffected(); err != nil || n == 0 {
-		return false, err
-	}
-	if _, err := tx.Exec(`UPDATE players SET zet = zet + ? WHERE id = ?`, zet, playerID); err != nil {
-		return false, err
-	}
-	for _, item := range items {
-		if err := addOwned(tx, playerID, item); err != nil {
-			return false, err
-		}
-	}
-	return true, tx.Commit()
 }
 
 // Equip moves up to count of an owned item into a slot, and returns how many the slot then

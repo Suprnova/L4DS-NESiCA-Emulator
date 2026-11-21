@@ -15,8 +15,8 @@ var (
 	grantOpens  = time.Date(2026, 11, 1, 8, 0, 0, 0, time.UTC)
 	grantCloses = time.Date(2026, 12, 1, 8, 0, 0, 0, time.UTC)
 	starterPack = zet.Grant{
-		ID: 7, Name: "Starter Pack", Start: grantOpens, End: grantCloses, Zet: 500,
-		Item: store.Owned{Kind: store.Weapon, ItemID: 6, Name: "Rifle", Count: 5},
+		ID: 7, Start: grantOpens, End: grantCloses,
+		Gift: store.Gift{Name: "Starter Pack", Zet: 500, Item: store.Owned{Kind: store.Weapon, ItemID: 6, Name: "Rifle", Count: 5}},
 	}
 )
 
@@ -79,7 +79,7 @@ func TestHandler_Login_ClosedGrant_IsNotGiven(t *testing.T) {
 }
 
 func TestHandler_Login_SVPGrant_IsShownButNotOwned(t *testing.T) {
-	bonus := zet.Grant{ID: 1, Name: "Bonus SVP", Start: grantOpens, End: grantCloses, Item: store.Owned{Kind: store.SVP, Count: 900}}
+	bonus := zet.Grant{ID: 1, Start: grantOpens, End: grantCloses, Gift: store.Gift{Name: "Bonus SVP", Item: store.Owned{Kind: store.SVP, Count: 900}}}
 	server, s := newGrantServer(t, grantOpens, bonus)
 	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
 
@@ -88,6 +88,21 @@ func TestHandler_Login_SVPGrant_IsShownButNotOwned(t *testing.T) {
 	want := []string{"1", "1", "Bonus SVP", "0", "0", "10", "", "900", "0", "0", "0", "0"}
 	if owned, _ := s.Owned(player.ID); !slices.Equal(got[:12], want) || len(owned) != 0 {
 		t.Fatalf("lines = %q, want %q; owned %+v", got, want, owned)
+	}
+}
+
+func TestHandler_Login_QueuedGifts_AreSentOnceAsComps(t *testing.T) {
+	server, s := newGrantServer(t, grantOpens)
+	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
+	id, _ := s.Queue(player.ID, grantOpens, store.Gift{Name: "Apology", Zet: 1000, Item: store.Owned{Kind: store.SkillItem, ItemID: 29, Name: "Counter", Count: 3}})
+
+	first := strings.Split(postTo(server, "/login", fmt.Sprintf("player_id=%d", player.ID)), "\n")
+	again := strings.Split(postTo(server, "/login", fmt.Sprintf("player_id=%d", player.ID)), "\n")
+
+	want := []string{"0", "0", "0", "0", "1", fmt.Sprint(id), "Apology", "1000", "29", "8", "Counter", "3", "0", "0", "0", "0", "5"}
+	updated, _ := s.Player(player.ID)
+	if !slices.Equal(first[3:20], want) || again[7] != "0" || again[8] != "5" || updated.Zet != 1000 {
+		t.Fatalf("first login lines = %q, want %q; second %q; zet %d", first[3:20], want, again[3:9], updated.Zet)
 	}
 }
 
