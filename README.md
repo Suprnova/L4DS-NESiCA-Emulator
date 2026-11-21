@@ -66,6 +66,16 @@ Run these from the repository.
    change_debug_dummyCardID <16-digit card number>
    ```
 
+## Gifts for one card
+
+`go run ./cmd/l4ds-server grant` queues a gift for the player of one card, delivered in the reward pop-up at the card's next login, while the server runs or not. For example, 1000 ZG and two skill items (the id is the item's in the game's catalogue):
+
+```
+go run ./cmd/l4ds-server grant -card <16-digit card number> -name おわび -zet 1000 -item skill_item -item-id 21 -item-name 胆汁ガード -count 2
+```
+
+`-item` is `weapon`, `skill_item`, or `svp`; `go run ./cmd/l4ds-server grant -h` lists every flag.
+
 ## Trees
 
 `go run ./cmd/l4ds-tree revert <tree>` restores a tree's original bytes, and `apply` patches it again. Most of a tree is junctions to the game's folders, so delete a tree with `cmd /c rmdir /s /q <tree>`, which removes junctions without following them into the game.

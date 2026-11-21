@@ -367,36 +367,48 @@ func (s Server) Schedule() (zet.Schedule, error) {
 var itemCategories = map[string]store.ItemKind{"weapon": store.Weapon, "skill_item": store.SkillItem, "svp": store.SVP}
 
 // convert returns the grant as the game server hands it out, or what the configuration gets
-// wrong: an id below 1, no name, an end not after the start, negative ZG, nothing to give, or an
-// item without a known category, a count, or (unless svp) an id and a name.
+// wrong: an id below 1, an end not after the start, or a bad gift (see [NewGift]).
 func (g Grant) convert() (zet.Grant, error) {
 	switch {
 	case g.ID < 1:
 		return zet.Grant{}, errors.New("id must be at least 1")
-	case g.Name == "":
-		return zet.Grant{}, errors.New("name must not be empty")
 	case !g.End.After(g.Start):
 		return zet.Grant{}, fmt.Errorf("end %s is not after the start %s", g.End, g.Start)
-	case g.Zet < 0:
-		return zet.Grant{}, errors.New("zet is negative")
-	case g.Zet == 0 && g.Item == nil:
-		return zet.Grant{}, errors.New("gives neither zet nor an item")
 	}
-	grant := zet.Grant{ID: g.ID, Start: g.Start, End: g.End, Gift: store.Gift{Name: g.Name, Zet: g.Zet}}
-	if g.Item == nil {
-		return grant, nil
+	gift, err := NewGift(g.Name, g.Zet, g.Item)
+	if err != nil {
+		return zet.Grant{}, err
 	}
-	kind, ok := itemCategories[g.Item.Category]
+	return zet.Grant{ID: g.ID, Start: g.Start, End: g.End, Gift: gift}, nil
+}
+
+// NewGift returns the gift of name, zet ZG, and item (none when nil), or what is wrong with it:
+// no name, negative ZG, nothing to give, or an item without a known category, a count, or (unless
+// svp) an id and a name.
+func NewGift(name string, zet int64, item *GrantItem) (store.Gift, error) {
+	switch {
+	case name == "":
+		return store.Gift{}, errors.New("name must not be empty")
+	case zet < 0:
+		return store.Gift{}, errors.New("zet is negative")
+	case zet == 0 && item == nil:
+		return store.Gift{}, errors.New("gives neither zet nor an item")
+	}
+	gift := store.Gift{Name: name, Zet: zet}
+	if item == nil {
+		return gift, nil
+	}
+	kind, ok := itemCategories[item.Category]
 	switch {
 	case !ok:
-		return zet.Grant{}, fmt.Errorf("unknown item category %q", g.Item.Category)
-	case g.Item.Count < 1:
-		return zet.Grant{}, errors.New("item count must be at least 1")
-	case kind != store.SVP && (g.Item.ID < 1 || g.Item.Name == ""):
-		return zet.Grant{}, fmt.Errorf("a %s needs an id and a name", g.Item.Category)
+		return store.Gift{}, fmt.Errorf("unknown item category %q", item.Category)
+	case item.Count < 1:
+		return store.Gift{}, errors.New("item count must be at least 1")
+	case kind != store.SVP && (item.ID < 1 || item.Name == ""):
+		return store.Gift{}, fmt.Errorf("a %s needs an id and a name", item.Category)
 	}
-	grant.Item = store.Owned{Kind: kind, ItemID: g.Item.ID, Name: g.Item.Name, Count: g.Item.Count}
-	return grant, nil
+	gift.Item = store.Owned{Kind: kind, ItemID: item.ID, Name: item.Name, Count: item.Count}
+	return gift, nil
 }
 
 func lookup(what string, id int, key string, values map[string]int, name string) (int, error) {
