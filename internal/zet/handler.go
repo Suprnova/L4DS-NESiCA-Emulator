@@ -5,6 +5,7 @@ package zet
 import (
 	"log/slog"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -100,26 +101,57 @@ func unanswered(w http.ResponseWriter, r *http.Request) {
 	http.NotFound(w, r)
 }
 
-// stageKinds are the stage lists the game keeps, one per way of playing: national co-op, store
-// co-op, clan co-op and single play.
-var stageKinds = []int{1, 2, 3, 4}
+// Stage kinds: the stage lists the game keeps, one per way of playing.
+const (
+	nationalCoop = 1
+	storeCoop    = 2
+	clanCoop     = 3
+	singlePlay   = 4
+)
 
-// stageList answers the stage list the game fetches at startup: each stage in every kind, with
-// its id, kind, "new" flag, name and chapters (id and name). The stage select offers these
-// stages, opening each chapter once the one before it is cleared. Every stage is flagged new:
-// the game marks an uncleared chapter of a new stage "NEW", and a stage "NEW" while none of its
-// chapters is cleared, "CLEAR" once all are, and nothing in between.
+var stageKinds = []int{nationalCoop, storeCoop, clanCoop, singlePlay}
+
+// stageList answers the stage list the game fetches at startup: each stage of each kind, with its
+// id, kind, "new" flag, name and chapters (id and name). National co-op offers the stages of the
+// national co-op list open now, or every stage when none is; the other kinds offer every stage.
+// The stage select offers these stages, opening each chapter once the one before it is cleared.
+// Every stage is flagged new: the game marks an uncleared chapter of a new stage "NEW", and a
+// stage "NEW" while none of its chapters is cleared, "CLEAR" once all are, and nothing in between.
 func (s *Server) stageList(w http.ResponseWriter, _ *http.Request) {
-	lines := []string{"1", "1", "0", strconv.Itoa(len(s.stages) * len(stageKinds))}
+	var entries []string
+	count := 0
 	for _, kind := range stageKinds {
-		for _, stage := range s.stages {
-			lines = append(lines, strconv.Itoa(stage.ID), strconv.Itoa(kind), "1", stage.Name, strconv.Itoa(len(stage.Chapters)))
+		for _, stage := range s.offered(kind) {
+			count++
+			entries = append(entries, strconv.Itoa(stage.ID), strconv.Itoa(kind), "1", stage.Name, strconv.Itoa(len(stage.Chapters)))
 			for _, chapter := range stage.Chapters {
-				lines = append(lines, strconv.Itoa(chapter.ID), chapter.Name)
+				entries = append(entries, strconv.Itoa(chapter.ID), chapter.Name)
 			}
 		}
 	}
+	lines := append([]string{"1", "1", "0", strconv.Itoa(count)}, entries...)
 	w.Write([]byte(strings.Join(lines, "\n") + "\n"))
+}
+
+// offered returns the stages a stage kind offers now.
+func (s *Server) offered(kind int) []game.Stage {
+	if kind != nationalCoop {
+		return s.stages
+	}
+	now := s.now()
+	for _, list := range s.schedule.CoopStages {
+		if _, open := list.When.At(now); !open {
+			continue
+		}
+		var stages []game.Stage
+		for _, id := range list.Stages {
+			if i := slices.IndexFunc(s.stages, func(stage game.Stage) bool { return stage.ID == id }); i >= 0 {
+				stages = append(stages, s.stages[i])
+			}
+		}
+		return stages
+	}
+	return s.stages
 }
 
 // reply answers every request with a fixed body.

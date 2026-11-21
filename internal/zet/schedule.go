@@ -18,6 +18,17 @@ type Schedule struct {
 	Versus []VersusUnit
 	Events []Event
 	Grants []Grant
+	// CoopStages are the national co-op stage lists. The first open at the time of the stage list
+	// request is what national co-op offers; with none open, it offers every stage.
+	CoopStages []StageList
+}
+
+// StageList is a list of stages offered while its span is open, such as the official service's
+// four national co-op stages, changed every Thursday.
+type StageList struct {
+	When calendar.Span
+	// Stages are stage ids, in the order offered.
+	Stages []int
 }
 
 // Grant is a gift every card gets once in each run of the grant's span, at its first login during

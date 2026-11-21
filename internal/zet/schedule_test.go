@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/calendar"
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/game"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/store"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/zet"
 )
@@ -80,6 +81,50 @@ func TestHandler_Event_AlwaysOpen_IsListedWithZeroTimes(t *testing.T) {
 		"1", "99", "1", "37", "0", "0", "0", "0", ""}
 	if !slices.Equal(got, want) {
 		t.Fatalf("lines = %q, want %q", got, want)
+	}
+}
+
+// stageKindsOf returns, for each stage kind in a stage list reply, the stage ids it lists.
+func stageKindsOf(body string) map[string][]string {
+	lines := strings.Split(body, "\n")
+	kinds := map[string][]string{}
+	for i := 4; i+4 < len(lines); {
+		chapters := 0
+		fmt.Sscan(lines[i+4], &chapters)
+		kinds[lines[i+1]] = append(kinds[lines[i+1]], lines[i])
+		i += 5 + 2*chapters
+	}
+	return kinds
+}
+
+func coopServer(t *testing.T, now time.Time) *zet.Server {
+	t.Helper()
+	s, err := store.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	stages := []game.Stage{{ID: 1, Name: "A"}, {ID: 2, Name: "B", Chapters: []game.Chapter{{ID: 1, Name: "B1"}}}, {ID: 3, Name: "C"}}
+	weekly := calendar.Span{Start: on(4, 1, 8), End: on(4, 8, 8), Every: calendar.Every{Days: 14}}
+	server := zet.NewServer(s, zet.Catalog{Stages: stages, Schedule: zet.Schedule{CoopStages: []zet.StageList{{When: weekly, Stages: []int{3, 2, 9}}}}})
+	server.SetClock(func() time.Time { return now })
+	return server
+}
+
+func TestHandler_Stages_OpenCoopList_LimitsOnlyNationalCoop(t *testing.T) {
+	got := stageKindsOf(postTo(coopServer(t, on(4, 2, 12)), "/stages", "t"))
+
+	every := []string{"1", "2", "3"}
+	if !slices.Equal(got["1"], []string{"3", "2"}) || !slices.Equal(got["2"], every) || !slices.Equal(got["3"], every) || !slices.Equal(got["4"], every) {
+		t.Fatalf("stages by kind = %v", got)
+	}
+}
+
+func TestHandler_Stages_NoCoopListOpen_OffersEveryStage(t *testing.T) {
+	got := stageKindsOf(postTo(coopServer(t, on(4, 9, 12)), "/stages", "t"))
+
+	if !slices.Equal(got["1"], []string{"1", "2", "3"}) {
+		t.Fatalf("national co-op stages = %v", got["1"])
 	}
 }
 
