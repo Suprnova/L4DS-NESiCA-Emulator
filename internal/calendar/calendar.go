@@ -21,6 +21,10 @@ func NextDayTurn(t time.Time) time.Time {
 	return turn
 }
 
+// DayOf returns the start of the service day t falls in: the latest day turn at or before t, in
+// t's time zone.
+func DayOf(t time.Time) time.Time { return NextDayTurn(t).AddDate(0, 0, -1) }
+
 // Every is how often a span repeats: every Days days, or every Years years on the same date and
 // time. The zero Every never repeats.
 type Every struct {

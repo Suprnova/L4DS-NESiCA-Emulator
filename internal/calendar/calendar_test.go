@@ -29,6 +29,18 @@ func TestNextDayTurn_IsTheNext0800(t *testing.T) {
 	}
 }
 
+func TestDayOf_IsTheLatestDayTurn(t *testing.T) {
+	for now, want := range map[time.Time]time.Time{
+		at(4, 2, 1, 0):  at(4, 1, 8, 0),
+		at(4, 2, 8, 0):  at(4, 2, 8, 0),
+		at(4, 2, 23, 0): at(4, 2, 8, 0),
+	} {
+		if got := calendar.DayOf(now); !got.Equal(want) {
+			t.Errorf("DayOf(%s) = %s, want %s", now, got, want)
+		}
+	}
+}
+
 func TestSpan_At_FindsTheRunOfAWeeklySpan(t *testing.T) {
 	run, ok := weekly.At(at(5, 20, 12, 0))
 
