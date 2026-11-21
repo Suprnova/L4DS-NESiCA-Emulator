@@ -218,9 +218,10 @@ type Store struct {
 }
 
 // Open opens the database at path, creating it and applying any missing schema changes. Use
-// ":memory:" for a database that lives as long as the store. Foreign keys are enforced.
+// ":memory:" for a database that lives as long as the store. Foreign keys are enforced, and a
+// write waits up to five seconds while another process holds the lock.
 func Open(path string) (*Store, error) {
-	db, err := sql.Open("sqlite", path+"?_pragma=foreign_keys(1)")
+	db, err := sql.Open("sqlite", path+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
 	if err != nil {
 		return nil, err
 	}
