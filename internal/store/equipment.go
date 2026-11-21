@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 )
 
 // ItemKind is the kind of an item, numbered as the game's item categories (item_cgr_id).
@@ -12,11 +13,29 @@ type ItemKind int64
 const (
 	// Weapon is a carried weapon (category 1).
 	Weapon ItemKind = 1
+	// Upper is clothing on the upper body (category 2), worn in slot 2.
+	Upper ItemKind = 2
+	// Lower is clothing on the lower body (category 3), worn in slot 3.
+	Lower ItemKind = 3
+	// Title is a title (category 4), worn in slot 0.
+	Title ItemKind = 4
+	// Accessory is a face, upper-body, or lower-body accessory (category 6), worn in slot 1, 2,
+	// or 3.
+	Accessory ItemKind = 6
+	// Head is a hat or other head accessory (category 7), worn in slot 0.
+	Head ItemKind = 7
 	// SkillItem is a skill item (category 8).
 	SkillItem ItemKind = 8
 	// SVP is play time (category 10). The game credits it itself, so it is never owned.
 	SVP ItemKind = 10
 )
+
+// Stacks reports whether items of the kind come in counted stacks, as weapons and skill items
+// do. Of any other kind a player owns or wears an item or not: its count is 1.
+func (k ItemKind) Stacks() bool { return k == Weapon || k == SkillItem }
+
+// Wearable reports whether items of the kind are avatar items: clothing and accessories.
+func (k ItemKind) Wearable() bool { return k == Upper || k == Lower || k == Accessory || k == Head }
 
 // Slots is how many slots a player has of each kind.
 const Slots = 4
@@ -91,8 +110,12 @@ func (s *Store) Owned(playerID int64) ([]Owned, error) {
 // asks, and returns how many the slot then holds. What the slot holds of the item already counts
 // towards count, and the rest comes from the player's owned items, as far as they go. When the
 // slot holds another item, that one goes back to the owned items. It returns [ErrNotOwned] when
-// the player owns none of the item outside the slots. count must be at least 1.
+// the player owns none of the item outside the slots. count must be at least 1 for a kind that
+// stacks, and is 1 for any other.
 func (s *Store) Equip(playerID int64, kind ItemKind, slot, itemID, count int64) (int64, error) {
+	if !kind.Stacks() {
+		count = 1
+	}
 	if count < 1 {
 		return 0, fmt.Errorf("store: cannot equip %d items", count)
 	}
@@ -144,11 +167,16 @@ func (s *Store) Equip(playerID int64, kind ItemKind, slot, itemID, count int64) 
 }
 
 // addOwned adds item's count, which may be negative, to the player's stack of the item, and
-// removes a stack left with none. A new stack takes item's name.
+// removes a stack left with none. A new stack takes item's name. A kind that does not stack is
+// owned at most once.
 func addOwned(tx *sql.Tx, playerID int64, item Owned) error {
-	_, err := tx.Exec(`INSERT INTO owned_items (player_id, kind, item_id, name, count) VALUES (?, ?, ?, ?, ?)
-		ON CONFLICT (player_id, kind, item_id) DO UPDATE SET count = count + excluded.count`,
-		playerID, item.Kind, item.ItemID, item.Name, item.Count)
+	most := int64(math.MaxInt64)
+	if !item.Kind.Stacks() {
+		most = 1
+	}
+	_, err := tx.Exec(`INSERT INTO owned_items (player_id, kind, item_id, name, count) VALUES (?, ?, ?, ?, MIN(?, ?))
+		ON CONFLICT (player_id, kind, item_id) DO UPDATE SET count = MIN(count + excluded.count, ?)`,
+		playerID, item.Kind, item.ItemID, item.Name, item.Count, most, most)
 	if err != nil {
 		return err
 	}

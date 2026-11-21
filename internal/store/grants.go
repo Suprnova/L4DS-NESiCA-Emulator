@@ -10,8 +10,8 @@ type Gift struct {
 	Name string
 	// Zet is the ZG given, added to the player's ZG.
 	Zet int64
-	// Item is the item given, or none when its Kind is 0. A weapon or skill item becomes the
-	// player's own; SVP is credited by the game itself, with Count the seconds, and is not kept.
+	// Item is the item given, or none when its Kind is 0. It becomes the player's own, except
+	// SVP, which the game credits itself, with Count the seconds.
 	Item Owned
 }
 
@@ -93,12 +93,12 @@ func (s *Store) DeliverQueued(playerID int64, at time.Time) ([]QueuedGift, error
 	return gifts, tx.Commit()
 }
 
-// give adds a gift's ZG to the player's, and its weapon or skill item to their owned items.
+// give adds a gift's ZG to the player's, and its item, unless SVP, to their owned items.
 func give(tx *sql.Tx, playerID int64, gift Gift) error {
 	if _, err := tx.Exec(`UPDATE players SET zet = zet + ? WHERE id = ?`, gift.Zet, playerID); err != nil {
 		return err
 	}
-	if gift.Item.Kind != Weapon && gift.Item.Kind != SkillItem {
+	if gift.Item.Kind == 0 || gift.Item.Kind == SVP {
 		return nil
 	}
 	return addOwned(tx, playerID, gift.Item)

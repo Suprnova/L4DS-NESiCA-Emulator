@@ -124,6 +124,33 @@ func TestEquip_ItemNotOwned_ReturnsErrNotOwned(t *testing.T) {
 	}
 }
 
+func TestOwned_ItemThatDoesNotStack_IsOwnedOnce(t *testing.T) {
+	s := openStore(t)
+	player := register(t, s)
+	title := store.Owned{Kind: store.Title, ItemID: 3, Name: "Rookie", Count: 1}
+
+	own(t, s, player.ID, title, title)
+
+	if got, _ := s.Owned(player.ID); !slices.Equal(got, []store.Owned{title}) {
+		t.Fatalf("Owned() = %+v, want %+v", got, title)
+	}
+}
+
+func TestEquip_ItemThatDoesNotStack_IsSetOnceWhateverTheCount(t *testing.T) {
+	s := openStore(t)
+	player := register(t, s)
+	coat := store.Owned{Kind: store.Upper, ItemID: 201, Name: "Coat", Count: 1}
+	own(t, s, player.ID, coat)
+
+	count, err := s.Equip(player.ID, store.Upper, 2, 201, 0)
+
+	equipment, _ := s.Equipment(player.ID)
+	want := []store.Equipped{{Kind: store.Upper, Slot: 2, ItemID: 201, Name: "Coat", Count: 1}}
+	if err != nil || count != 1 || !slices.Equal(equipment, want) {
+		t.Fatalf("Equip() = %d, %v; equipment %+v", count, err, equipment)
+	}
+}
+
 func TestChangeCounts_TakesOffTheCountAndEmptiesSlotsThatRunOut(t *testing.T) {
 	s := openStore(t)
 	player := register(t, s)
