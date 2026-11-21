@@ -87,10 +87,11 @@ func (s *Store) Owned(playerID int64) ([]Owned, error) {
 	return owned, rows.Err()
 }
 
-// Equip moves up to count of an owned item into a slot, and returns how many the slot then
-// holds. When the slot holds the same item, they are added to it; when it holds another, that
-// one goes back to the player's owned items. It returns [ErrNotOwned] when the player owns none
-// of the item outside the slots. count must be at least 1.
+// Equip sets an owned item into a slot to hold count of it in all, as the game's equip request
+// asks, and returns how many the slot then holds. What the slot holds of the item already counts
+// towards count, and the rest comes from the player's owned items, as far as they go. When the
+// slot holds another item, that one goes back to the owned items. It returns [ErrNotOwned] when
+// the player owns none of the item outside the slots. count must be at least 1.
 func (s *Store) Equip(playerID int64, kind ItemKind, slot, itemID, count int64) (int64, error) {
 	if count < 1 {
 		return 0, fmt.Errorf("store: cannot equip %d items", count)
@@ -101,28 +102,34 @@ func (s *Store) Equip(playerID int64, kind ItemKind, slot, itemID, count int64) 
 	}
 	defer tx.Rollback()
 
-	item := Owned{Kind: kind, ItemID: itemID}
-	err = tx.QueryRow(`SELECT name, count FROM owned_items WHERE player_id = ? AND kind = ? AND item_id = ?`, playerID, kind, itemID).Scan(&item.Name, &item.Count)
-	if errors.Is(err, sql.ErrNoRows) {
-		return 0, ErrNotOwned
-	}
-	if err != nil {
-		return 0, err
-	}
-	item.Count = min(item.Count, count)
-	if err := addOwned(tx, playerID, Owned{Kind: kind, ItemID: itemID, Count: -item.Count}); err != nil {
-		return 0, err
-	}
-
 	var current Equipped
 	err = tx.QueryRow(`SELECT item_id, name, count FROM equipment WHERE player_id = ? AND kind = ? AND slot = ?`, playerID, kind, slot).Scan(&current.ItemID, &current.Name, &current.Count)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return 0, err
+	}
+	held := int64(0)
+	if current.ItemID == itemID {
+		held = current.Count
+	}
+
+	item := Owned{Kind: kind, ItemID: itemID}
+	err = tx.QueryRow(`SELECT name, count FROM owned_items WHERE player_id = ? AND kind = ? AND item_id = ?`, playerID, kind, itemID).Scan(&item.Name, &item.Count)
 	switch {
+	case errors.Is(err, sql.ErrNoRows) && held > 0:
+		return held, nil
 	case errors.Is(err, sql.ErrNoRows):
+		return 0, ErrNotOwned
 	case err != nil:
 		return 0, err
-	case current.ItemID == itemID:
-		item.Count += current.Count
-	default:
+	}
+	moved := min(item.Count, max(count-held, 0))
+	if err := addOwned(tx, playerID, Owned{Kind: kind, ItemID: itemID, Count: -moved}); err != nil {
+		return 0, err
+	}
+	item.Count = held + moved
+	if held > 0 {
+		item.Name = current.Name
+	} else if current.Count > 0 {
 		if err := addOwned(tx, playerID, Owned{Kind: kind, ItemID: current.ItemID, Name: current.Name, Count: current.Count}); err != nil {
 			return 0, err
 		}

@@ -14,8 +14,9 @@ import (
 // equipFailed is the equip reply that sets nothing: result 0, which the game takes as a failure.
 const equipFailed = "1\n0\n0\n"
 
-// equip moves item_num of the item item_id, of category item_cgr_id, from the player's owned
-// items into their slot_id, and answers with slot_set_num, the slot's new count, which the game
+// equip fills the player's slot_id with the item item_id, of category item_cgr_id, from their
+// owned items until it holds item_num in all (the game sends the item's count plus what the slot
+// holds of it already, GameUI 0x10056b50), and answers with slot_set_num, the slot's new count, which the game
 // shows as the slot's count (GameUI 0x10056d40 for a weapon, 0x10056e70 for a skill item). Only
 // weapons and skill items are kept; other categories, a guest, a slot outside 1 to
 // [store.Slots], a count below 1, and an item the player does not own get the failure reply.

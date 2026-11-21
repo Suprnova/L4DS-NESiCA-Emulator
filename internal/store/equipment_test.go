@@ -69,13 +69,27 @@ func TestEquip_PartOfTheStack_LeavesTheRestOwned(t *testing.T) {
 	}
 }
 
-func TestEquip_SameItemAgain_AddsToTheSlot(t *testing.T) {
+func TestEquip_SameItemAgain_FillsTheSlotToTheCount(t *testing.T) {
 	s := openStore(t)
 	player := register(t, s)
 	own(t, s, player.ID, rifle)
 	s.Equip(player.ID, store.Weapon, 1, 6, 2)
 
-	count, err := s.Equip(player.ID, store.Weapon, 1, 6, 3)
+	count, err := s.Equip(player.ID, store.Weapon, 1, 6, 4)
+
+	owned, _ := s.Owned(player.ID)
+	if err != nil || count != 4 || len(owned) != 1 || owned[0].Count != 1 {
+		t.Fatalf("Equip() = %d, %v, want 4; owned %+v", count, err, owned)
+	}
+}
+
+func TestEquip_SameItemNoneLeftOwned_KeepsTheSlot(t *testing.T) {
+	s := openStore(t)
+	player := register(t, s)
+	own(t, s, player.ID, rifle)
+	s.Equip(player.ID, store.Weapon, 1, 6, 5)
+
+	count, err := s.Equip(player.ID, store.Weapon, 1, 6, 8)
 
 	if err != nil || count != 5 {
 		t.Fatalf("Equip() = %d, %v, want 5", count, err)

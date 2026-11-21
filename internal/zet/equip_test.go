@@ -36,13 +36,13 @@ func TestHandler_Equip_MovesTheOwnedItemIntoTheSlot(t *testing.T) {
 	}
 }
 
-func TestHandler_Equip_SameItemAgain_ReportsTheStack(t *testing.T) {
+func TestHandler_Equip_SameItemAgain_FillsTheSlotToTheCount(t *testing.T) {
 	server, s := newServer(t)
 	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
 	give(t, s, player.ID, store.Owned{Kind: store.SkillItem, ItemID: 30, Count: 5})
 	postTo(server, "/equip", fmt.Sprintf("player_id=%d&item_cgr_id=8&item_id=30&slot_id=2&item_num=3", player.ID))
 
-	got := postTo(server, "/equip", fmt.Sprintf("player_id=%d&item_cgr_id=8&item_id=30&slot_id=2&item_num=2", player.ID))
+	got := postTo(server, "/equip", fmt.Sprintf("player_id=%d&item_cgr_id=8&item_id=30&slot_id=2&item_num=5", player.ID))
 
 	if got != "1\n1\n0\n5\n" {
 		t.Fatalf("body = %q", got)
