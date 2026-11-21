@@ -149,6 +149,15 @@ var migrations = []string{
 		day       INTEGER NOT NULL,
 		PRIMARY KEY (player_id, day)
 	)`,
+	`CREATE TABLE campaign_deliveries (
+		player_id    INTEGER NOT NULL REFERENCES players (id),
+		kind         TEXT    NOT NULL,
+		campaign_id  INTEGER NOT NULL,
+		run          INTEGER NOT NULL,
+		step         INTEGER NOT NULL,
+		delivered_at INTEGER NOT NULL,
+		PRIMARY KEY (player_id, kind, campaign_id, run, step)
+	)`,
 }
 
 // settingsColumns lists the columns holding a player's [Settings], in field order.
