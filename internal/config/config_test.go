@@ -272,8 +272,9 @@ server:
 	loaded, err := config.Load(path)
 	got, scheduleErr := loaded.Server.Maintenance.Schedule()
 
-	if err != nil || scheduleErr != nil || got.Warn != 30*time.Minute || got.Daily == nil || got.Daily.Start != 6*time.Hour || got.Daily.End != 8*time.Hour ||
-		len(got.Windows) != 1 || got.Windows[0].End.Sub(got.Windows[0].Start) != 8*time.Hour {
+	daily := got.Windows[0]
+	if err != nil || scheduleErr != nil || got.Warn != 30*time.Minute || len(got.Windows) != 2 || daily.Every.Days != 1 ||
+		daily.Start.Hour() != 6 || daily.End.Hour() != 8 || got.Windows[1].End.Sub(got.Windows[1].Start) != 8*time.Hour {
 		t.Fatalf("Schedule() = %+v, %v (load %v)", got, scheduleErr, err)
 	}
 }

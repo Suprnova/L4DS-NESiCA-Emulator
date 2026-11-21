@@ -1,30 +1,24 @@
-// Package maintenance decides when the server is down for maintenance: a window every day, dated
-// windows, and how long before a window the games are warned.
+// Package maintenance decides when the server is down for maintenance: windows that may repeat, such
+// as one every day, and how long before a window the games are warned.
 package maintenance
 
 import (
 	"slices"
 	"time"
+
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/calendar"
 )
 
-// Window is a span of maintenance, from Start until End.
+// Window is a stretch of maintenance, from Start until End.
 type Window struct {
 	Start, End time.Time
 }
 
-// Daily is a window every day, as offsets from midnight in the server's time zone. An End at or
-// before Start ends the next day.
-type Daily struct {
-	Start, End time.Duration
-}
-
-// Schedule is when maintenance happens. Windows that overlap or touch, such as a dated window
-// extending the daily one, count as one window.
+// Schedule is when maintenance happens. Windows that overlap or touch, such as a one-off window
+// extending a daily one, count as one window.
 type Schedule struct {
-	// Daily, when set, is a window every day.
-	Daily *Daily
-	// Windows are one-off windows.
-	Windows []Window
+	// Windows are the maintenance windows, each a span that may repeat.
+	Windows []calendar.Span
 	// Warn is how long before a window the games are told it is coming; 0 tells them nothing.
 	Warn time.Duration
 }
@@ -62,10 +56,18 @@ func (s Schedule) At(now time.Time) Status {
 	return Status{}
 }
 
-// Next returns the window under way at now or else the next one, with overlapping and touching
-// windows merged, and false when there is none.
+// lookahead is how far ahead of now Next looks for a window.
+const lookahead = 7 * 24 * time.Hour
+
+// Next returns the window under way at now or else the next one starting within a week, with
+// overlapping and touching windows merged, and false when there is none.
 func (s Schedule) Next(now time.Time) (Window, bool) {
-	windows := slices.DeleteFunc(s.windowsAround(now), func(w Window) bool { return !w.End.After(now) })
+	var windows []Window
+	for _, span := range s.Windows {
+		for _, run := range span.Runs(now, now.Add(lookahead)) {
+			windows = append(windows, Window{run.Start, run.End})
+		}
+	}
 	if len(windows) == 0 {
 		return Window{}, false
 	}
@@ -80,22 +82,4 @@ func (s Schedule) Next(now time.Time) (Window, bool) {
 		}
 	}
 	return merged, true
-}
-
-// windowsAround returns the dated windows and the daily window's occurrences from the day before
-// now to the day after, which covers any daily window under way or next.
-func (s Schedule) windowsAround(now time.Time) []Window {
-	windows := slices.Clone(s.Windows)
-	if s.Daily != nil {
-		midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-		for day := -1; day <= 1; day++ {
-			start := midnight.AddDate(0, 0, day).Add(s.Daily.Start)
-			end := midnight.AddDate(0, 0, day).Add(s.Daily.End)
-			if !end.After(start) {
-				end = end.AddDate(0, 0, 1)
-			}
-			windows = append(windows, Window{start, end})
-		}
-	}
-	return windows
 }

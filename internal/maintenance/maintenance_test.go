@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/calendar"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/maintenance"
 )
 
@@ -11,8 +12,16 @@ var jst = time.FixedZone("JST", 9*60*60)
 
 func at(day, hour, minute int) time.Time { return time.Date(2026, 11, day, hour, minute, 0, 0, jst) }
 
+// daily is a window every day from start to end, hours of the day.
+func daily(start, end int) calendar.Span {
+	return calendar.Span{Start: at(1, start, 0), End: at(1, end, 0), Every: calendar.Every{Days: 1}}
+}
+
+// once is a one-off window.
+func once(start, end time.Time) calendar.Span { return calendar.Span{Start: start, End: end} }
+
 // official is the official service's daily window, 06:00 to 08:00, warned 30 minutes ahead.
-var official = maintenance.Schedule{Daily: &maintenance.Daily{Start: 6 * time.Hour, End: 8 * time.Hour}, Warn: 30 * time.Minute}
+var official = maintenance.Schedule{Windows: []calendar.Span{daily(6, 8)}, Warn: 30 * time.Minute}
 
 func TestAt_DuringTheDailyWindow_IsActive(t *testing.T) {
 	got := official.At(at(20, 7, 0))
@@ -64,7 +73,7 @@ func TestNext_AfterTodaysWindow_IsTomorrows(t *testing.T) {
 
 func TestNext_DatedWindowExtendingTheDailyOne_MergesThem(t *testing.T) {
 	schedule := official
-	schedule.Windows = []maintenance.Window{{Start: at(20, 6, 0), End: at(20, 9, 15)}}
+	schedule.Windows = append(schedule.Windows, once(at(20, 6, 0), at(20, 9, 15)))
 
 	got, ok := schedule.Next(at(20, 5, 0))
 
@@ -75,7 +84,7 @@ func TestNext_DatedWindowExtendingTheDailyOne_MergesThem(t *testing.T) {
 
 func TestNext_DatedWindowEndingAtTheDailyStart_MergesThem(t *testing.T) {
 	schedule := official
-	schedule.Windows = []maintenance.Window{{Start: at(20, 0, 0), End: at(20, 6, 0)}}
+	schedule.Windows = append(schedule.Windows, once(at(20, 0, 0), at(20, 6, 0)))
 
 	got, ok := schedule.Next(at(20, 1, 0))
 
@@ -85,7 +94,7 @@ func TestNext_DatedWindowEndingAtTheDailyStart_MergesThem(t *testing.T) {
 }
 
 func TestNext_DailyWindowPastMidnight_EndsTheNextDay(t *testing.T) {
-	schedule := maintenance.Schedule{Daily: &maintenance.Daily{Start: 23 * time.Hour, End: time.Hour}}
+	schedule := maintenance.Schedule{Windows: []calendar.Span{{Start: at(1, 23, 0), End: at(2, 1, 0), Every: calendar.Every{Days: 1}}}}
 
 	got, ok := schedule.Next(at(20, 0, 30))
 
@@ -95,7 +104,7 @@ func TestNext_DailyWindowPastMidnight_EndsTheNextDay(t *testing.T) {
 }
 
 func TestNext_OnlyPastDatedWindows_IsNone(t *testing.T) {
-	schedule := maintenance.Schedule{Windows: []maintenance.Window{{Start: at(19, 6, 0), End: at(19, 8, 0)}}}
+	schedule := maintenance.Schedule{Windows: []calendar.Span{once(at(19, 6, 0), at(19, 8, 0))}}
 
 	_, ok := schedule.Next(at(20, 7, 0))
 

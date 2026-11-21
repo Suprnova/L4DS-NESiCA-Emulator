@@ -14,6 +14,7 @@ import (
 
 	"go.yaml.in/yaml/v4"
 
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/calendar"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/game"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/hotkey"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/maintenance"
@@ -288,13 +289,17 @@ func (m Maintenance) Schedule() (maintenance.Schedule, error) {
 		if err := errors.Join(errStart, errEnd); err != nil {
 			return maintenance.Schedule{}, fmt.Errorf("maintenance: %w", err)
 		}
-		schedule.Daily = &maintenance.Daily{Start: start, End: end}
+		if end <= start {
+			end += 24 * time.Hour
+		}
+		day := time.Date(2000, 1, 1, 0, 0, 0, 0, time.Local)
+		schedule.Windows = append(schedule.Windows, calendar.Span{Start: day.Add(start), End: day.Add(end), Every: calendar.Every{Days: 1}})
 	}
 	for _, w := range m.Windows {
 		if !w.End.After(w.Start) {
 			return maintenance.Schedule{}, fmt.Errorf("maintenance window from %s: end %s is not after the start", w.Start, w.End)
 		}
-		schedule.Windows = append(schedule.Windows, maintenance.Window{Start: w.Start, End: w.End})
+		schedule.Windows = append(schedule.Windows, calendar.Span{Start: w.Start, End: w.End})
 	}
 	return schedule, nil
 }
