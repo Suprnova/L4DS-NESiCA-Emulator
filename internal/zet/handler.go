@@ -186,6 +186,7 @@ func (s *Server) result(w http.ResponseWriter, r *http.Request) {
 	result := store.Result{
 		Played:      s.now(),
 		GameMode:    formInt(r, "game_mode"),
+		EventID:     formInt(r, "event_id"),
 		StageID:     formInt(r, "stage_id"),
 		ChapterID:   formInt(r, "chapter_id"),
 		Cleared:     formInt(r, "clear_flag") == 1 && formInt(r, "campaign_flag") == 1,

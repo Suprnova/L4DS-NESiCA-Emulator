@@ -231,6 +231,17 @@ func TestHandler_Login_CountsTheLogin(t *testing.T) {
 	}
 }
 
+func TestHandler_EventResult_KeepsTheEventID(t *testing.T) {
+	server, s := newServer(t)
+	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
+
+	postTo(server, "/result", fmt.Sprintf("player_id=%d&game_mode=2&event_id=4", player.ID))
+
+	if results, _ := s.Results(player.ID); len(results) != 1 || results[0].EventID != 4 {
+		t.Fatalf("results = %+v", results)
+	}
+}
+
 func TestHandler_EventOrVersusResult_LeavesTheStageProgressAlone(t *testing.T) {
 	server, s := newServer(t)
 	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)

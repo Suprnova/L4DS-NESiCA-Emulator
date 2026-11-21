@@ -230,12 +230,12 @@ func TestRecordResult_StoresTheResult(t *testing.T) {
 	s := openStore(t)
 	player := register(t, s)
 	played := time.Date(2026, 11, 17, 21, 30, 15, 0, time.UTC)
-	result := store.Result{Played: played, GameMode: 7, StageID: 1, ChapterID: 1, Score: 900, VSClassPoint: -10, VSPlays: 1, VSWins: 1}
+	result := store.Result{Played: played, GameMode: 7, EventID: 3, StageID: 1, ChapterID: 1, Score: 900, VSClassPoint: -10, VSPlays: 1, VSWins: 1}
 
 	err := s.RecordResult(player.ID, result)
 
 	results, _ := s.Results(player.ID)
-	if err != nil || len(results) != 1 || !results[0].Played.Equal(played) || results[0].GameMode != 7 || results[0].Score != 900 || results[0].VSClassPoint != -10 {
+	if err != nil || len(results) != 1 || !results[0].Played.Equal(played) || results[0].GameMode != 7 || results[0].EventID != 3 || results[0].Score != 900 || results[0].VSClassPoint != -10 {
 		t.Fatalf("Results() = %+v, err = %v", results, err)
 	}
 }

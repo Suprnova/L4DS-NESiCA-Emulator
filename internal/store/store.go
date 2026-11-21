@@ -158,6 +158,7 @@ var migrations = []string{
 		delivered_at INTEGER NOT NULL,
 		PRIMARY KEY (player_id, kind, campaign_id, run, step)
 	)`,
+	`ALTER TABLE results ADD COLUMN event_id INTEGER NOT NULL DEFAULT 0`,
 }
 
 // settingsColumns lists the columns holding a player's [Settings], in field order.
@@ -210,14 +211,17 @@ type Settings struct {
 // DefaultSettings are the settings a new player starts with.
 var DefaultSettings = Settings{MasterVolume: 5, BGMVolume: 5, MouseSensitivity: 3, KeyMap: 1}
 
-// Result is a finished chapter: when it was played, in which game mode, stage and chapter, and
-// what it adds to the player's totals. The game computes the classes itself: CoopClassID and
+// Result is a finished chapter: when it was played, in which game mode, event, stage and chapter,
+// and what it adds to the player's totals. The game computes the classes itself: CoopClassID and
 // VSClassID are the player's classes after the chapter (0 keeps the stored class), and
 // CoopClassPoint and VSClassPoint are the changes in co-op and versus class points, which may be
 // negative. VSPlays and VSWins add to the player's versus record. Played is kept to the second.
 type Result struct {
-	Played         time.Time
-	GameMode       int64
+	Played   time.Time
+	GameMode int64
+	// EventID is the event or versus unit played, in the event and versus modes (2 to 4 and 7
+	// to 10). Results recorded before event ids were kept have 0.
+	EventID        int64
 	StageID        int64
 	ChapterID      int64
 	Cleared        bool
@@ -388,8 +392,8 @@ func (s *Store) RecordResult(playerID int64, result Result) error {
 		return ErrNoPlayer
 	}
 
-	if _, err := tx.Exec(`INSERT INTO results (player_id, `+resultColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		playerID, result.Played.Unix(), result.GameMode, result.StageID, result.ChapterID, result.Cleared,
+	if _, err := tx.Exec(`INSERT INTO results (player_id, `+resultColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		playerID, result.Played.Unix(), result.GameMode, result.EventID, result.StageID, result.ChapterID, result.Cleared,
 		result.Zet, result.Exp, result.Score, result.CoopClassPoint, result.VSClassPoint, result.CoopClassID, result.VSClassID,
 		result.VSPlays, result.VSWins); err != nil {
 		return err
@@ -404,7 +408,7 @@ func (s *Store) RecordResult(playerID int64, result Result) error {
 }
 
 // resultColumns lists the columns of a result row after its player, in [Result] field order.
-const resultColumns = `played_at, game_mode, stage_id, chapter_id, cleared, zet, exp, score,
+const resultColumns = `played_at, game_mode, event_id, stage_id, chapter_id, cleared, zet, exp, score,
 	coop_class_point, vs_class_point, coop_class_id, vs_class_id, vs_plays, vs_wins`
 
 // Results returns a player's results, oldest first.
@@ -419,7 +423,7 @@ func (s *Store) Results(playerID int64) ([]Result, error) {
 	for rows.Next() {
 		var result Result
 		var played int64
-		if err := rows.Scan(&played, &result.GameMode, &result.StageID, &result.ChapterID, &result.Cleared,
+		if err := rows.Scan(&played, &result.GameMode, &result.EventID, &result.StageID, &result.ChapterID, &result.Cleared,
 			&result.Zet, &result.Exp, &result.Score, &result.CoopClassPoint, &result.VSClassPoint,
 			&result.CoopClassID, &result.VSClassID, &result.VSPlays, &result.VSWins); err != nil {
 			return nil, err
