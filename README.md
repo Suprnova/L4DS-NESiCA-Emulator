@@ -42,7 +42,7 @@ Run these from the repository.
 
    The name is the `server_key` in the configuration file; if you change one, change the other. A DNS server on your network that resolves the name works too, in place of the hosts file.
 
-3. **Configure the server.** Copy `l4ds.example.yaml` and adjust it: in the `server` section the store's name and prefecture and the calendar file; in the `shim` section the server key, the netcon port, and your card keys. Copy `calendar.example.yaml` too: it holds what the server offers and when, such as the versus schedule, the events, the gifts handed out at login, the national co-op stage list, and maintenance, and entries can repeat (every week, every year). Every setting is described in the two files. Without a calendar nothing is scheduled, and versus and the event modes stay unavailable.
+3. **Configure the server.** Copy `l4ds.example.yaml` and adjust it: in the `server` section the store's name and prefecture and the calendar file; in the `shim` section the server key, the netcon port, and your card keys. Copy `calendar.example.yaml` too: it holds what the server offers and when, such as the versus schedule, the events, the gifts handed out at login, campaigns (daily bonus SVP, login ladders, returning-player packs, and rewards for plays), the national co-op stage list, and maintenance, and entries can repeat (every week, every year). Every setting is described in the two files. Without a calendar nothing is scheduled, and versus and the event modes stay unavailable.
 
 4. **Start the server** and wait for `dedicated server ready` before creating a room:
 

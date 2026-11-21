@@ -3,6 +3,7 @@ package config_test
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -234,5 +235,58 @@ func TestCalendar_ErrorNamesTheCalendarFile(t *testing.T) {
 
 	if err == nil || !strings.Contains(err.Error(), "calendar.yaml") {
 		t.Fatalf("Load() error = %v", err)
+	}
+}
+
+func TestCalendar_Campaigns_ReadEachKind(t *testing.T) {
+	got, err := loadCalendar(t, `daily_gifts:
+  - {id: 1, when: {start: 2027-01-01, end: 2027-12-31}, item: {category: svp, count: 900}}
+  - {id: 2, when: {start: 2027-01-01, end: 2027-12-31}, max_level: 1, item: {category: svp, count: 330}}
+login_ladders:
+  - id: 1
+    name: Golden Week
+    when: {start: 2027-04-29, end: 2027-05-08, every: 1y}
+    rounds: 2
+    steps:
+      - {zet: 100}
+      - {zet: 100, item: {category: weapon, id: 13, name: M60, count: 2}}
+returning:
+  - {id: 1, name: Welcome back, when: {start: 2027-01-01, end: 2027-01-21, every: 8w}, absent_days: 15, zet: 15000}
+play_ladders:
+  - id: 1
+    when: {start: 2027-06-09, end: 2027-06-22}
+    count: {mode: coop, stage: 12, cleared: true}
+    steps:
+      - {at: 1, name: First clear, zet: 500}
+      - {at: 3, name: Third clear, item: {category: title, id: 7, name: Harvester}}
+`)
+
+	schedule := got.Schedule
+	if err != nil || len(schedule.DailyGifts) != 2 || schedule.DailyGifts[1].MaxLevel != 1 || len(schedule.LoginLadders) != 1 ||
+		schedule.LoginLadders[0].Rounds != 2 || len(schedule.LoginLadders[0].Steps) != 2 || len(schedule.Returning) != 1 ||
+		schedule.Returning[0].AbsentDays != 15 || len(schedule.PlayLadders) != 1 || schedule.PlayLadders[0].Filter.StageID != 12 ||
+		!slices.Equal(schedule.PlayLadders[0].Filter.Modes, []int64{1}) || schedule.PlayLadders[0].Steps[1].At != 3 {
+		t.Fatalf("Load() = %+v, %v", schedule, err)
+	}
+}
+
+func TestCalendar_BadCampaigns_AreErrors(t *testing.T) {
+	const when = "when: {start: 2027-01-01, end: 2027-01-31}"
+	entries := map[string]string{
+		"daily gift, title item":    "daily_gifts:\n  - {id: 1, " + when + ", item: {category: title, id: 1, name: A}}\n",
+		"daily gift, no when":       "daily_gifts:\n  - {id: 1, zet: 100}\n",
+		"daily gift, twice":         "daily_gifts:\n  - {id: 1, " + when + ", zet: 1}\n  - {id: 1, " + when + ", zet: 2}\n",
+		"login ladder, no steps":    "login_ladders:\n  - {id: 1, name: A, " + when + "}\n",
+		"login ladder, no name":     "login_ladders:\n  - {id: 1, " + when + ", steps: [{zet: 1}]}\n",
+		"returning, no days away":   "returning:\n  - {id: 1, name: A, " + when + ", zet: 1}\n",
+		"play ladder, bad mode":     "play_ladders:\n  - {id: 1, " + when + ", count: {mode: clan}, steps: [{at: 1, name: A, zet: 1}]}\n",
+		"play ladder, step at 0":    "play_ladders:\n  - {id: 1, " + when + ", steps: [{at: 0, name: A, zet: 1}]}\n",
+		"play ladder, step unnamed": "play_ladders:\n  - {id: 1, " + when + ", steps: [{at: 1, zet: 1}]}\n",
+	}
+
+	for name, text := range entries {
+		if _, err := loadCalendar(t, text); err == nil {
+			t.Errorf("%s: Load() error = nil", name)
+		}
 	}
 }

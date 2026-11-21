@@ -2,6 +2,7 @@ package config
 
 import (
 	"bytes"
+	"cmp"
 	"errors"
 	"fmt"
 	"io"
@@ -29,7 +30,77 @@ type Calendar struct {
 	Grants      []Grant      `yaml:"grants"`
 	// CoopStages are the national co-op stage lists; with none open, national co-op offers every
 	// stage.
-	CoopStages []StageList `yaml:"coop_stages"`
+	CoopStages   []StageList     `yaml:"coop_stages"`
+	DailyGifts   []DailyGift     `yaml:"daily_gifts"`
+	LoginLadders []LoginLadder   `yaml:"login_ladders"`
+	Returning    []ReturningPack `yaml:"returning"`
+	PlayLadders  []PlayLadder    `yaml:"play_ladders"`
+}
+
+// DailyGift is a gift every card gets once a service day, at its first login of the day while
+// the gift is open, in the login pop-up's daily division, which shows no name.
+type DailyGift struct {
+	ID   int  `yaml:"id"`
+	When When `yaml:"when"`
+	// MaxLevel limits the gift to cards at this level or below; 0 or left out, every card.
+	MaxLevel int   `yaml:"max_level"`
+	Zet      int64 `yaml:"zet"`
+	// Item is a weapon, a skill item, or svp, the only items the daily division shows.
+	Item *GrantItem `yaml:"item"`
+}
+
+// LoginLadder is a list of gifts, one for each service day a card logs in during a run.
+type LoginLadder struct {
+	ID   int    `yaml:"id"`
+	Name string `yaml:"name"`
+	When When   `yaml:"when"`
+	// Rounds is how many times a card goes through the steps in a run; 0 or left out, without end.
+	Rounds int          `yaml:"rounds"`
+	Steps  []LadderGift `yaml:"steps"`
+}
+
+// LadderGift is one step of a login ladder: ZG, an item, or both.
+type LadderGift struct {
+	Zet  int64      `yaml:"zet"`
+	Item *GrantItem `yaml:"item"`
+}
+
+// ReturningPack is a gift for a card that comes back after AbsentDays service days or more without
+// a login or a play, at its first login during a run, once per run.
+type ReturningPack struct {
+	ID         int        `yaml:"id"`
+	Name       string     `yaml:"name"`
+	When       When       `yaml:"when"`
+	AbsentDays int        `yaml:"absent_days"`
+	Zet        int64      `yaml:"zet"`
+	Item       *GrantItem `yaml:"item"`
+}
+
+// PlayLadder is a set of gifts for counts of a card's plays during a run, given in the result of
+// the play that reaches each count.
+type PlayLadder struct {
+	ID    int        `yaml:"id"`
+	When  When       `yaml:"when"`
+	Count PlayCount  `yaml:"count"`
+	Steps []PlayStep `yaml:"steps"`
+}
+
+// PlayCount is which plays a play ladder counts.
+type PlayCount struct {
+	// Mode is coop, event, single, versus, or any; left out, any.
+	Mode string `yaml:"mode"`
+	// Stage is the stage id counted; 0 or left out, any.
+	Stage int `yaml:"stage"`
+	// Cleared counts only chapters cleared in co-op or single play.
+	Cleared bool `yaml:"cleared"`
+}
+
+// PlayStep is the gift for reaching At counted plays, shown under its name.
+type PlayStep struct {
+	At   int        `yaml:"at"`
+	Name string     `yaml:"name"`
+	Zet  int64      `yaml:"zet"`
+	Item *GrantItem `yaml:"item"`
 }
 
 // When is when a calendar entry is open: a first run from Start until End, repeated Every so
@@ -292,7 +363,115 @@ func (c Calendar) Schedule() (zet.Schedule, error) {
 		}
 		schedule.CoopStages = append(schedule.CoopStages, converted)
 	}
+	if err := c.campaigns(&schedule); err != nil {
+		return zet.Schedule{}, err
+	}
 	return schedule, nil
+}
+
+// playModes maps play count modes to the matching modes (game_mode) they count.
+var playModes = map[string][]int64{"any": nil, "coop": {1}, "event": {2, 3, 4}, "single": {5}, "versus": {7, 8, 9, 10}}
+
+// campaigns adds the calendar's campaigns to schedule, or returns the first one it gets wrong:
+// an id below 1 or used twice in its kind, a bad or missing when, a bad gift, a daily gift item
+// other than a weapon, skill item, or svp, a ladder without steps or a name, a returning pack
+// without its days away, or a play count without a known mode or a step count.
+func (c Calendar) campaigns(schedule *zet.Schedule) error {
+	ids := map[string]map[int]bool{}
+	check := func(kind string, id int, when When) (calendar.Span, error) {
+		if ids[kind] == nil {
+			ids[kind] = map[int]bool{}
+		}
+		switch {
+		case id < 1:
+			return calendar.Span{}, fmt.Errorf("%s %d: id must be at least 1", kind, id)
+		case ids[kind][id]:
+			return calendar.Span{}, fmt.Errorf("%s %d is listed twice", kind, id)
+		}
+		ids[kind][id] = true
+		span, err := required(when)
+		if err != nil {
+			return calendar.Span{}, fmt.Errorf("%s %d: %w", kind, id, err)
+		}
+		return span, nil
+	}
+
+	for _, daily := range c.DailyGifts {
+		when, err := check("daily gift", daily.ID, daily.When)
+		if err != nil {
+			return err
+		}
+		if daily.Item != nil && !slices.Contains([]string{"weapon", "skill_item", "svp"}, daily.Item.Category) {
+			return fmt.Errorf("daily gift %d: the daily division shows only a weapon, a skill item, or svp", daily.ID)
+		}
+		gift, err := NewGift("daily", daily.Zet, daily.Item)
+		if err != nil {
+			return fmt.Errorf("daily gift %d: %w", daily.ID, err)
+		}
+		schedule.DailyGifts = append(schedule.DailyGifts, zet.DailyGift{ID: daily.ID, When: when, MaxLevel: daily.MaxLevel, Gift: gift})
+	}
+
+	for _, ladder := range c.LoginLadders {
+		when, err := check("login ladder", ladder.ID, ladder.When)
+		if err != nil {
+			return err
+		}
+		if len(ladder.Steps) == 0 || ladder.Rounds < 0 {
+			return fmt.Errorf("login ladder %d: needs steps and rounds of 0 or more", ladder.ID)
+		}
+		converted := zet.LoginLadder{ID: ladder.ID, Name: ladder.Name, When: when, Rounds: ladder.Rounds}
+		for i, step := range ladder.Steps {
+			gift, err := NewGift(ladder.Name, step.Zet, step.Item)
+			if err != nil {
+				return fmt.Errorf("login ladder %d, step %d: %w", ladder.ID, i+1, err)
+			}
+			converted.Steps = append(converted.Steps, gift)
+		}
+		schedule.LoginLadders = append(schedule.LoginLadders, converted)
+	}
+
+	for _, pack := range c.Returning {
+		when, err := check("returning pack", pack.ID, pack.When)
+		if err != nil {
+			return err
+		}
+		if pack.AbsentDays < 1 {
+			return fmt.Errorf("returning pack %d: absent_days must be at least 1", pack.ID)
+		}
+		gift, err := NewGift(pack.Name, pack.Zet, pack.Item)
+		if err != nil {
+			return fmt.Errorf("returning pack %d: %w", pack.ID, err)
+		}
+		schedule.Returning = append(schedule.Returning, zet.ReturningPack{ID: pack.ID, When: when, AbsentDays: pack.AbsentDays, Gift: gift})
+	}
+
+	for _, ladder := range c.PlayLadders {
+		when, err := check("play ladder", ladder.ID, ladder.When)
+		if err != nil {
+			return err
+		}
+		mode := cmp.Or(ladder.Count.Mode, "any")
+		modes, known := playModes[mode]
+		if !known {
+			return fmt.Errorf("play ladder %d: unknown mode %q", ladder.ID, mode)
+		}
+		if len(ladder.Steps) == 0 {
+			return fmt.Errorf("play ladder %d: needs steps", ladder.ID)
+		}
+		converted := zet.PlayLadder{ID: ladder.ID, When: when, Filter: store.ResultFilter{Modes: modes, StageID: int64(ladder.Count.Stage), Cleared: ladder.Count.Cleared}}
+		for i, step := range ladder.Steps {
+			if step.At < 1 {
+				return fmt.Errorf("play ladder %d, step %d: at must be at least 1", ladder.ID, i+1)
+			}
+			gift, err := NewGift(step.Name, step.Zet, step.Item)
+			if err != nil {
+				return fmt.Errorf("play ladder %d, step %d: %w", ladder.ID, i+1, err)
+			}
+			converted.Steps = append(converted.Steps, zet.PlayStep{At: step.At, Gift: gift})
+		}
+		schedule.PlayLadders = append(schedule.PlayLadders, converted)
+	}
+	return nil
 }
 
 // required reads a When that must be given.

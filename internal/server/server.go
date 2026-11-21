@@ -132,7 +132,8 @@ func Start(ctx context.Context, options Options) (*Server, error) {
 			close(s.poolDone)
 		}()
 	}
-	slog.Info("server started", "stores", len(options.Config.Stores), "versus units", len(schedule.Versus), "events", len(schedule.Events), "grants", len(schedule.Grants), "co-op stage lists", len(schedule.CoopStages))
+	slog.Info("server started", "stores", len(options.Config.Stores), "versus units", len(schedule.Versus), "events", len(schedule.Events), "grants", len(schedule.Grants), "co-op stage lists", len(schedule.CoopStages),
+		"daily gifts", len(schedule.DailyGifts), "login ladders", len(schedule.LoginLadders), "returning packs", len(schedule.Returning), "play ladders", len(schedule.PlayLadders))
 	return s, nil
 }
 

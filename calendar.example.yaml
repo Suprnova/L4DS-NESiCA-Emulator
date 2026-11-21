@@ -84,6 +84,71 @@ grants:
       name: AK-47
       count: 5
 
+# Daily gifts: a card gets each once a service day (08:00 to 08:00), at its first login of the day
+# while it is open, in the login pop-up's daily division, which shows no name. A gift gives zet,
+# an item, or both; the item is a weapon, a skill item, or svp, the only ones that division shows.
+# max_level gives it only to cards at that level or below. The official daily bonus was 900 SVP,
+# 1800 on holidays (list a second 900 SVP gift for each holiday), and level-1 cards got 330 more.
+daily_gifts:
+  - id: 1
+    when: {start: 2026-01-01, end: 2030-12-31}
+    item: {category: svp, count: 900}
+  - id: 2
+    when: {start: 2026-01-01, end: 2030-12-31}
+    max_level: 1
+    item: {category: svp, count: 330}
+#  - id: 3 # a double day
+#    when: {start: 2027-05-03, end: 2027-05-05}
+#    item: {category: svp, count: 900}
+
+# Login ladders: a list of gifts, one for each service day a card logs in while the ladder is open:
+# the first day logged in gets the first step, the second day the second, and so on; a second
+# login the same day gets nothing more. rounds is how many times a card goes through the steps
+# each time the ladder is open; 0 or left out, it starts over without end. A step with zet shows in
+# the pop-up's cumulative login division with its day count; one without zet, which that division
+# drops, shows under the ladder's name with the grants. Items are as for grants. The official
+# Golden Week ladder:
+# login_ladders:
+#   - id: 1
+#     name: ゴールデンウィークログインボーナス
+#     when: {start: 2027-04-29, end: 2027-05-08, every: 1y}
+#     rounds: 1
+#     steps:
+#       - {zet: 1000}
+#       - {zet: 500, item: {category: skill_item, id: 30, name: ハンター返し, count: 5}}
+#       - {zet: 500, item: {category: weapon, id: 13, name: M60, count: 5}}
+
+# Returning-player packs: a card that has gone absent_days service days or more without a login or
+# a play gets the pack at its first login while the pack is open, once each time it is open. A
+# card that has never been seen does not count as returning. The official 半月ごぶさた ran three
+# weeks about every two months:
+# returning:
+#   - id: 1
+#     name: 半月ごぶさたキャンペーン
+#     when: {start: 2027-01-07, end: 2027-01-27, every: 8w}
+#     absent_days: 15
+#     zet: 15000
+#     item: {category: weapon, id: 7, name: M-16 ライフル, count: 15}
+
+# Play ladders: gifts for a card's plays while the ladder is open, counted from its results: each
+# step is given in the result of the play that reaches its count, shown under the step's name.
+# count picks the plays: mode is coop, event, single, versus, or any (left out); stage counts one
+# stage id; cleared counts only chapters cleared in co-op or single play. Items are as for grants.
+# The official versus day gave ten of the day's weapon for one versus play on a Saturday, and the
+# Blood Harvest release rewarded 1, 3, 5, and more clears:
+# play_ladders:
+#   - id: 1
+#     when: {start: 2027-04-03, end: 2027-04-03, every: 1w, until: 2027-04-24}
+#     count: {mode: versus}
+#     steps:
+#       - {at: 1, name: 熱血！対戦モード, item: {category: weapon, id: 12, name: グレネードランチャー, count: 10}}
+#   - id: 2
+#     when: {start: 2027-06-10, end: 2027-06-23}
+#     count: {mode: coop, stage: 12, cleared: true}
+#     steps:
+#       - {at: 1, name: ブラッド・ハーベスト 1回クリア, zet: 1000}
+#       - {at: 3, name: ブラッド・ハーベスト 3回クリア, item: {category: skill_item, id: 30, name: ハンター返し, count: 3}}
+
 # National co-op stage lists. While a list is open, national co-op offers only its stages (by
 # stage id, in order); with none open, it offers every stage. Single play, store co-op, and clan
 # co-op always offer every stage. The official list was four stages, changed every Thursday at
