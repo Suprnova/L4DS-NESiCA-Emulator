@@ -63,76 +63,82 @@ func stageLines(clears []store.Clear) []string {
 }
 
 // membershipLines are the lines after the stage progress: release_difficulty 0, paid_membersihp
-// 1, which lets the reward pop-up set a weapon or skill item into a free slot, and the daily_quest
-// flag 0.
+// 1, which lets the reward pop-up set an item into a free slot, and the daily_quest flag 0.
 var membershipLines = []string{"0", "1", "0"}
 
 // slotLines are item_slot and weapon_slot, which open every skill item and weapon slot.
 var slotLines = []string{strconv.Itoa(store.Slots), strconv.Itoa(store.Slots)}
 
-// giftLines lists one entry of the comps or period_bonus group: its id, name, and ZG, and its
-// item block (id, category, name, count, resource id, color index, replace, and rare). A weapon's
-// resource id is its id; everything else has 0.
-func giftLines(id int64, gift store.Gift) []string {
-	resource := int64(0)
-	if gift.Item.Kind == store.Weapon {
-		resource = gift.Item.ItemID
-	}
-	return []string{strconv.FormatInt(id, 10), gift.Name, strconv.FormatInt(gift.Zet, 10),
-		strconv.FormatInt(gift.Item.ItemID, 10), strconv.FormatInt(int64(gift.Item.Kind), 10), gift.Item.Name,
-		strconv.FormatInt(gift.Item.Count, 10), strconv.FormatInt(resource, 10), "0", "0", "0"}
+// delivered is a gift given at this login: a queued gift's id or a grant's, and what it gave.
+type delivered struct {
+	id   int64
+	gift store.Gift
 }
 
-// compLines lists the comps group: the number of gifts queued for the player, then each one.
-func compLines(gifts []store.QueuedGift) []string {
+// giftGroupLines lists the comps or period_bonus group: the number of gifts, then for each its
+// id, name, and ZG, and its item block (id, category, name, count, resource id, color index,
+// replace, and rare). A weapon's resource id is its id, an avatar item's resource id and color
+// are the ones its id carries, and everything else has 0 for both. Replace and rare are 0: a
+// nonzero rare on an avatar item makes the pop-up take the next entry as its partner (GameUI
+// 0x10058850).
+func giftGroupLines(gifts []delivered) []string {
 	lines := []string{strconv.Itoa(len(gifts))}
-	for _, g := range gifts {
-		lines = append(lines, giftLines(g.ID, g.Gift)...)
-	}
-	return lines
-}
-
-// periodBonusLines lists the period_bonus group: the number of grants, then each one.
-func periodBonusLines(grants []Grant) []string {
-	lines := []string{strconv.Itoa(len(grants))}
-	for _, g := range grants {
-		lines = append(lines, giftLines(int64(g.ID), g.Gift)...)
+	for _, d := range gifts {
+		item := d.gift.Item
+		resource, color := 0, 0
+		switch {
+		case item.Kind == store.Weapon:
+			resource = int(item.ItemID)
+		case item.Kind.Wearable():
+			resource, color = avatarParts(item.ItemID)
+		}
+		lines = append(lines, strconv.FormatInt(d.id, 10), d.gift.Name, strconv.FormatInt(d.gift.Zet, 10),
+			strconv.FormatInt(item.ItemID, 10), strconv.FormatInt(int64(item.Kind), 10), item.Name,
+			strconv.FormatInt(item.Count, 10), strconv.Itoa(resource), strconv.Itoa(color), "0", "0")
 	}
 	return lines
 }
 
 // deliverQueued gives a player the gifts queued for them, and returns them.
-func (s *Server) deliverQueued(playerID int64) []store.QueuedGift {
+func (s *Server) deliverQueued(playerID int64) []delivered {
 	gifts, err := s.store.DeliverQueued(playerID, s.now())
 	if err != nil {
 		slog.Error("deliver queued gifts", "player", playerID, "error", err)
 		return nil
 	}
+	var given []delivered
 	for _, g := range gifts {
 		slog.Info("queued gift delivered", "player", playerID, "gift", g.ID, "name", g.Name)
+		given = append(given, delivered{g.ID, g.Gift})
 	}
-	return gifts
+	return given
 }
 
-// deliverGrants gives a player the grants open now that they have not had, and returns them.
-func (s *Server) deliverGrants(playerID int64) []Grant {
+// deliverGrants gives a player, whose card's chara_id is chara, the grants open now that they have
+// not had, and returns them. An avatar item their survivor cannot wear is left out of its grant.
+func (s *Server) deliverGrants(playerID, chara int64) []delivered {
 	now := s.now()
-	var delivered []Grant
+	var given []delivered
 	for _, g := range s.schedule.Grants {
 		if !g.Open(now) {
 			continue
 		}
-		ok, err := s.store.Deliver(playerID, int64(g.ID), now, g.Gift)
+		gift, fits := g.For(chara)
+		ok, err := s.store.Deliver(playerID, int64(g.ID), now, gift)
 		if err != nil {
 			slog.Error("deliver grant", "player", playerID, "grant", g.ID, "error", err)
 			continue
 		}
-		if ok {
-			slog.Info("grant delivered", "player", playerID, "grant", g.ID, "name", g.Name)
-			delivered = append(delivered, g)
+		if !ok {
+			continue
 		}
+		slog.Info("grant delivered", "player", playerID, "grant", g.ID, "name", g.Name)
+		if !fits {
+			slog.Warn("grant's avatar item does not fit the player's survivor; left out", "player", playerID, "grant", g.ID, "item", g.Avatar.Name)
+		}
+		given = append(given, delivered{int64(g.ID), gift})
 	}
-	return delivered
+	return given
 }
 
 // login counts the login, delivers the gifts queued for the player and the open grants they have
@@ -143,28 +149,27 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	playerID := formInt(r, "player_id")
 	settings := store.DefaultSettings
 	var clears []store.Clear
-	var queued []store.QueuedGift
-	var grants []Grant
+	var queued, grants []delivered
 	if !guest(playerID) {
 		if err := s.store.RecordLogin(playerID); err != nil {
 			slog.Error("record login", "player", playerID, "error", err)
 		}
-		if player, err := s.store.Player(playerID); err == nil {
+		player, err := s.store.Player(playerID)
+		if err == nil {
 			settings = player.Settings
 		}
-		var err error
 		if clears, err = s.store.Clears(playerID); err != nil {
 			slog.Error("load clears", "player", playerID, "error", err)
 		}
 		queued = s.deliverQueued(playerID)
-		grants = s.deliverGrants(playerID)
+		grants = s.deliverGrants(playerID, player.CharaID)
 	}
 
 	lines := []string{"1", "1", "0"}
 	for range emptyGroups {
 		lines = append(lines, "0")
 	}
-	lines = append(lines, compLines(queued)...)
+	lines = append(lines, giftGroupLines(queued)...)
 	lines = append(lines, configLines(settings)...)
 	for range unusedLoginLines {
 		lines = append(lines, "0")
@@ -172,7 +177,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 
 	lines = append(lines, stageLines(clears)...)
 	lines = append(lines, membershipLines...)
-	lines = append(lines, periodBonusLines(grants)...)
+	lines = append(lines, giftGroupLines(grants)...)
 	lines = append(lines, slotLines...)
 	w.Write([]byte(strings.Join(lines, "\n") + "\n"))
 }

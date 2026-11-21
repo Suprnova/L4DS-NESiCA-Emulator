@@ -379,7 +379,7 @@ func (g Grant) convert() (zet.Grant, error) {
 	if err != nil {
 		return zet.Grant{}, err
 	}
-	return zet.Grant{ID: g.ID, Start: g.Start, End: g.End, Gift: gift}, nil
+	return zet.Grant{ID: g.ID, Start: g.Start, End: g.End, Gift: zet.Gift{Gift: gift}}, nil
 }
 
 // NewGift returns the gift of name, zet ZG, and item (none when nil), or what is wrong with it:

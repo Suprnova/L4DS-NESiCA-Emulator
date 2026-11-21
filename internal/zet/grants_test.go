@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/game"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/store"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/zet"
 )
@@ -16,7 +17,7 @@ var (
 	grantCloses = time.Date(2026, 12, 1, 8, 0, 0, 0, time.UTC)
 	starterPack = zet.Grant{
 		ID: 7, Start: grantOpens, End: grantCloses,
-		Gift: store.Gift{Name: "Starter Pack", Zet: 500, Item: store.Owned{Kind: store.Weapon, ItemID: 6, Name: "Rifle", Count: 5}},
+		Gift: zet.Gift{Gift: store.Gift{Name: "Starter Pack", Zet: 500, Item: store.Owned{Kind: store.Weapon, ItemID: 6, Name: "Rifle", Count: 5}}},
 	}
 )
 
@@ -79,7 +80,7 @@ func TestHandler_Login_ClosedGrant_IsNotGiven(t *testing.T) {
 }
 
 func TestHandler_Login_SVPGrant_IsShownButNotOwned(t *testing.T) {
-	bonus := zet.Grant{ID: 1, Start: grantOpens, End: grantCloses, Gift: store.Gift{Name: "Bonus SVP", Item: store.Owned{Kind: store.SVP, Count: 900}}}
+	bonus := zet.Grant{ID: 1, Start: grantOpens, End: grantCloses, Gift: zet.Gift{Gift: store.Gift{Name: "Bonus SVP", Item: store.Owned{Kind: store.SVP, Count: 900}}}}
 	server, s := newGrantServer(t, grantOpens, bonus)
 	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
 
@@ -103,6 +104,46 @@ func TestHandler_Login_QueuedGifts_AreSentOnceAsComps(t *testing.T) {
 	updated, _ := s.Player(player.ID)
 	if !slices.Equal(first[3:20], want) || again[7] != "0" || again[8] != "5" || updated.Zet != 1000 {
 		t.Fatalf("first login lines = %q, want %q; second %q; zet %d", first[3:20], want, again[3:9], updated.Zet)
+	}
+}
+
+func avatarGrant(t *testing.T, name string, color int) zet.Grant {
+	t.Helper()
+	item, ok := game.Avatar(name)
+	if !ok {
+		t.Fatalf("no avatar item %s", name)
+	}
+	return zet.Grant{ID: 9, Start: grantOpens, End: grantCloses, Gift: zet.Gift{
+		Gift:   store.Gift{Name: "Outfit", Item: store.Owned{Kind: zet.KindOf(item.Site), Name: "Coat"}},
+		Avatar: &item, Color: color,
+	}}
+}
+
+func TestHandler_Login_AvatarGrant_GivesTheSurvivorsOwnVariant(t *testing.T) {
+	grant := avatarGrant(t, "firefighter_upper_avt", 2)
+	server, s := newGrantServer(t, grantOpens, grant)
+	player, _ := s.Register("7020392000000001", "Survivor", 2, 1)
+
+	got := periodBonus(postTo(server, "/login", fmt.Sprintf("player_id=%d", player.ID)))
+
+	resource := grant.Avatar.Resources[game.Sara]
+	id := fmt.Sprint(resource*100 + 2)
+	want := []string{"1", "9", "Outfit", "0", id, "2", "Coat", "1", fmt.Sprint(resource), "2", "0", "0"}
+	owned, _ := s.Owned(player.ID)
+	if !slices.Equal(got[:12], want) || len(owned) != 1 || fmt.Sprint(owned[0].ItemID) != id {
+		t.Fatalf("lines = %q, want %q; owned %+v", got[:12], want, owned)
+	}
+}
+
+func TestHandler_Login_AvatarGrantTheSurvivorCannotWear_GivesNoItem(t *testing.T) {
+	grant := avatarGrant(t, "firefighter_upper_avt", 0)
+	server, s := newGrantServer(t, grantOpens, grant)
+	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
+
+	got := periodBonus(postTo(server, "/login", fmt.Sprintf("player_id=%d", player.ID)))
+
+	if owned, _ := s.Owned(player.ID); got[0] != "1" || got[5] != "0" || len(owned) != 0 {
+		t.Fatalf("lines = %q; owned %+v", got[:12], owned)
 	}
 }
 

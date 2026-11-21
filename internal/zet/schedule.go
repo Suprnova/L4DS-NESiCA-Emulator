@@ -5,8 +5,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/store"
 )
 
 // Schedule is what the game can play besides the stage list, the national versus schedule and
@@ -25,7 +23,7 @@ type Grant struct {
 	ID int
 	// Start and End bound when the grant is open: from Start, until End.
 	Start, End time.Time
-	store.Gift
+	Gift
 }
 
 // Open reports whether the grant is open at t.
