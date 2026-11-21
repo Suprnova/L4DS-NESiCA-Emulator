@@ -54,7 +54,7 @@ func TestHandler_Equip_UnkeptOrBadRequests_Fail(t *testing.T) {
 	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
 	give(t, s, player.ID, store.Owned{Kind: store.Weapon, ItemID: 6, Count: 5})
 	bodies := []string{
-		fmt.Sprintf("player_id=%d&item_cgr_id=4&item_id=1&slot_id=1&item_num=1", player.ID),
+		fmt.Sprintf("player_id=%d&item_cgr_id=5&item_id=1&slot_id=1&item_num=1", player.ID),
 		fmt.Sprintf("player_id=%d&item_cgr_id=1&item_id=6&slot_id=5&item_num=1", player.ID),
 		fmt.Sprintf("player_id=%d&item_cgr_id=1&item_id=6&slot_id=1&item_num=0", player.ID),
 		fmt.Sprintf("player_id=%d&item_cgr_id=1&item_id=7&slot_id=1&item_num=1", player.ID),
@@ -68,6 +68,36 @@ func TestHandler_Equip_UnkeptOrBadRequests_Fail(t *testing.T) {
 	}
 	if equipment, _ := s.Equipment(player.ID); len(equipment) != 0 {
 		t.Fatalf("equipment = %+v, want none", equipment)
+	}
+}
+
+func TestHandler_Equip_TitleOrAvatarItem_IsSetAloneInItsSlot(t *testing.T) {
+	server, s := newServer(t)
+	player, _ := s.Register("7020392000000001", "Survivor", 2, 1)
+	give(t, s, player.ID, store.Owned{Kind: store.Title, ItemID: 12, Name: "Rookie", Count: 1}, store.Owned{Kind: store.Accessory, ItemID: 1600, Name: "Beard", Count: 1})
+
+	title := postTo(server, "/equip", fmt.Sprintf("player_id=%d&item_cgr_id=4&item_id=12&slot_id=0&item_num=0", player.ID))
+	beard := postTo(server, "/equip", fmt.Sprintf("player_id=%d&item_cgr_id=6&item_id=1600&slot_id=1&item_num=0", player.ID))
+
+	equipment, _ := s.Equipment(player.ID)
+	want := []store.Equipped{
+		{Kind: store.Title, Slot: 0, ItemID: 12, Name: "Rookie", Count: 1},
+		{Kind: store.Accessory, Slot: 1, ItemID: 1600, Name: "Beard", Count: 1},
+	}
+	if title != "1\n1\n0\n1\n" || beard != "1\n1\n0\n1\n" || !slices.Equal(equipment, want) {
+		t.Fatalf("bodies %q, %q; equipment %+v", title, beard, equipment)
+	}
+}
+
+func TestHandler_Equip_AvatarItemInAnotherKindsSlot_Fails(t *testing.T) {
+	server, s := newServer(t)
+	player, _ := s.Register("7020392000000001", "Survivor", 2, 1)
+	give(t, s, player.ID, store.Owned{Kind: store.Upper, ItemID: 200, Count: 1})
+
+	got := postTo(server, "/equip", fmt.Sprintf("player_id=%d&item_cgr_id=2&item_id=200&slot_id=3&item_num=0", player.ID))
+
+	if equipment, _ := s.Equipment(player.ID); got != "1\n0\n0\n" || len(equipment) != 0 {
+		t.Fatalf("body = %q; equipment %+v", got, equipment)
 	}
 }
 
