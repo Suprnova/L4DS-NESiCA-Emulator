@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/game"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/store"
@@ -43,7 +44,7 @@ func TestServer_Select_ReportsExperienceAndLoginsAfterTheEmptyBlocks(t *testing.
 	server, s := newServer(t)
 	player, _ := s.Register("7020392000000001", "Survivor", 0, 1)
 	s.RecordResult(player.ID, store.Result{Exp: 222})
-	s.RecordLogin(player.ID)
+	s.RecordLogin(player.ID, time.Now())
 
 	reply, _ := server.Select("7020392000000001")
 

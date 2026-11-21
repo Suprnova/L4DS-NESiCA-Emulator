@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/calendar"
 	"github.com/Suprnova/L4DS-NESiCA-Emulator/internal/store"
 )
 
@@ -152,7 +153,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	var clears []store.Clear
 	var queued, grants []delivered
 	if !guest(playerID) {
-		if err := s.store.RecordLogin(playerID); err != nil {
+		if err := s.store.RecordLogin(playerID, calendar.DayOf(s.now())); err != nil {
 			slog.Error("record login", "player", playerID, "error", err)
 		}
 		player, err := s.store.Player(playerID)

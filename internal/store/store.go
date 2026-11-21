@@ -144,6 +144,11 @@ var migrations = []string{
 	INSERT INTO grant_deliveries_new SELECT player_id, grant_id, 0, delivered_at FROM grant_deliveries;
 	DROP TABLE grant_deliveries;
 	ALTER TABLE grant_deliveries_new RENAME TO grant_deliveries`,
+	`CREATE TABLE login_days (
+		player_id INTEGER NOT NULL REFERENCES players (id),
+		day       INTEGER NOT NULL,
+		PRIMARY KEY (player_id, day)
+	)`,
 }
 
 // settingsColumns lists the columns holding a player's [Settings], in field order.
@@ -447,9 +452,36 @@ func (s *Store) Rename(cardID, name string) error {
 	return s.updatePlayer(`UPDATE players SET name = ? WHERE `+byCard, name, cardID)
 }
 
-// RecordLogin counts one more login for a player.
-func (s *Store) RecordLogin(playerID int64) error {
-	return s.updatePlayer(`UPDATE players SET logins = logins + 1 WHERE id = ?`, playerID)
+// RecordLogin counts one more login for a player, on the service day that starts at day.
+func (s *Store) RecordLogin(playerID int64, day time.Time) error {
+	if err := s.updatePlayer(`UPDATE players SET logins = logins + 1 WHERE id = ?`, playerID); err != nil {
+		return err
+	}
+	_, err := s.db.Exec(`INSERT INTO login_days (player_id, day) VALUES (?, ?) ON CONFLICT DO NOTHING`, playerID, day.Unix())
+	return err
+}
+
+// LoginDays returns on how many service days a player logged in, counting the days that start
+// from from until to.
+func (s *Store) LoginDays(playerID int64, from, to time.Time) (int, error) {
+	var days int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM login_days WHERE player_id = ? AND day >= ? AND day < ?`, playerID, from.Unix(), to.Unix()).Scan(&days)
+	return days, err
+}
+
+// LastSeen returns the last time before before that a player logged in or a result of theirs
+// arrived: the start of the service day for a login. It reports false for a player seen at
+// neither before then, such as one whose logins came before the day log was kept.
+func (s *Store) LastSeen(playerID int64, before time.Time) (time.Time, bool, error) {
+	var last sql.NullInt64
+	err := s.db.QueryRow(`SELECT MAX(seen) FROM (
+			SELECT MAX(day) AS seen FROM login_days WHERE player_id = ? AND day < ?
+			UNION ALL SELECT MAX(played_at) FROM results WHERE player_id = ? AND played_at < ?)`,
+		playerID, before.Unix(), playerID, before.Unix()).Scan(&last)
+	if err != nil || !last.Valid {
+		return time.Time{}, false, err
+	}
+	return time.Unix(last.Int64, 0), true, nil
 }
 
 func (s *Store) updatePlayer(query string, args ...any) error {

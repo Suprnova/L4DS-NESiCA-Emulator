@@ -57,7 +57,7 @@ func TestPlayer_UnknownID_ReturnsErrNoPlayer(t *testing.T) {
 func TestRecordLogin_UnknownID_ReturnsErrNoPlayer(t *testing.T) {
 	s := openStore(t)
 
-	err := s.RecordLogin(42)
+	err := s.RecordLogin(42, time.Now())
 
 	if !errors.Is(err, store.ErrNoPlayer) {
 		t.Fatalf("error = %v, want ErrNoPlayer", err)
@@ -180,9 +180,9 @@ func TestRecordResult_UnknownPlayer_ReturnsAnError(t *testing.T) {
 func TestRecordLogin_CountsEachLogin(t *testing.T) {
 	s := openStore(t)
 	player := register(t, s)
-	s.RecordLogin(player.ID)
+	s.RecordLogin(player.ID, day1)
 
-	err := s.RecordLogin(player.ID)
+	err := s.RecordLogin(player.ID, day1)
 
 	got, _ := s.Player(player.ID)
 	if err != nil || got.Logins != 2 {
@@ -213,7 +213,7 @@ func TestOpen_DatabaseWithCardsOnPlayers_MovesThemToTheirOwnTable(t *testing.T) 
 	s.RecordResult(player.ID, store.Result{StageID: 1, ChapterID: 1, Cleared: true})
 	s.Close()
 	old, _ := sql.Open("sqlite", path)
-	old.Exec(`DROP TABLE queued_grants; DROP TABLE grant_deliveries; DROP TABLE owned_items; DROP TABLE equipment; DROP TABLE results; DROP TABLE cards; ALTER TABLE players ADD COLUMN card_id TEXT; UPDATE players SET card_id = '` + card + `'; PRAGMA user_version = 17`)
+	old.Exec(`DROP TABLE login_days; DROP TABLE queued_grants; DROP TABLE grant_deliveries; DROP TABLE owned_items; DROP TABLE equipment; DROP TABLE results; DROP TABLE cards; ALTER TABLE players ADD COLUMN card_id TEXT; UPDATE players SET card_id = '` + card + `'; PRAGMA user_version = 17`)
 	old.Close()
 
 	s, err := store.Open(path)
